@@ -1,0 +1,24 @@
+{
+  "name": "@angelifeline/react",
+  "version": "0.2.0",
+  "description": "AngeLifeline crisis overlay React component.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@angelifeline/core": "0.2.0",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hktrippyart/AngeLifeline.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/hktrippyart/AngeLifeline/issues"
+  },
+  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme"
+}

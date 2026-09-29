@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --night: #dceaf5;
+  --lavender: #5b8fc9;
+  --sage: #5a9a88;
+  --fog: #1e3348;
+  --mist: #4a657a;
+  --danger: #c94a4a;
+  --line: rgba(30, 51, 72, 0.12);
+}
+
+@theme inline {
+  --color-night: var(--night);
+  --color-lavender: var(--lavender);
+  --color-sage: var(--sage);
+  --color-fog: var(--fog);
+  --color-mist: var(--mist);
+  --color-danger: var(--danger);
+  --color-line: var(--line);
+  --font-serif: var(--font-cormorant);
+  --font-mono: var(--font-jetbrains);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--night);
+  color: var(--fog);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes aura-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.06);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.7s ease-out forwards;
+}
+
+.animate-aura-pulse {
+  animation: aura-pulse 8s ease-in-out infinite;
+}

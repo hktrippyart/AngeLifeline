@@ -1,0 +1,27 @@
+{
+  "name": "@angelifeline/next",
+  "version": "0.2.0",
+  "description": "Next.js App Router handlers for AngeLifeline venue and crisis APIs.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./venue-lookup": "./src/venue-lookup.ts",
+    "./crisis-helplines": "./src/crisis-helplines.ts"
+  },
+  "dependencies": {
+    "@angelifeline/core": "0.2.0",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "next": ">=15"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hktrippyart/AngeLifeline.git",
+    "directory": "packages/next"
+  },
+  "bugs": {
+    "url": "https://github.com/hktrippyart/AngeLifeline/issues"
+  },
+  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme"
+}

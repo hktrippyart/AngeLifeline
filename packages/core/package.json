@@ -1,0 +1,26 @@
+{
+  "name": "@angelifeline/core",
+  "version": "0.2.0",
+  "description": "AngeLifeline crisis routing, helplines, and location policy (server + client helpers).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hktrippyart/AngeLifeline.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/hktrippyart/AngeLifeline/issues"
+  },
+  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme"
+}

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AngeLifeline — demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=JetBrains+Mono&family=Manrope:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --night: #06050c;
+      --lavender: #bfa6ff;
+      --sage: #a1c7b3;
+      --fog: #e8e4f0;
+      --mist: #9a94a8;
+      --danger: #e85d5d;
+      --line: rgba(191, 166, 255, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: Manrope, system-ui, sans-serif;
+      background: var(--night);
+      color: var(--fog);
+    }
+    .auras {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+    .auras::before, .auras::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.35;
+    }
+    .auras::before {
+      width: 40vw; height: 40vw;
+      top: -10%; left: -5%;
+      background: var(--lavender);
+    }
+    .auras::after {
+      width: 35vw; height: 35vw;
+      bottom: -5%; right: -5%;
+      background: var(--sage);
+    }
+    .shell { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100dvh; }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding: 1rem 1.25rem;
+    }
+    header h1 {
+      margin: 0;
+      font-family: "Cormorant Garamond", serif;
+      font-size: 1.5rem;
+      letter-spacing: 0.12em;
+      font-weight: 500;
+    }
+    main {
+      flex: 1;
+      max-width: 42rem;
+      margin: 0 auto;
+      width: 100%;
+      padding: 2rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      transition: filter 0.7s;
+    }
+    main.blurred { filter: blur(16px); pointer-events: none; }
+    .messages { flex: 1; display: flex; flex-direction: column; gap: 1.25rem; padding-bottom: 1rem; }
+    .bubble {
+      max-width: 90%;
+      padding: 0.75rem 1rem;
+      border-radius: 1rem;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .bubble.assistant {
+      align-self: flex-start;
+      background: rgba(255,255,255,0.05);
+      color: var(--mist);
+      border: 1px solid var(--line);
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: rgba(191,166,255,0.15);
+      border: 1px solid rgba(191,166,255,0.25);
+    }
+    form {
+      border-top: 1px solid rgba(191,166,255,0.12);
+      padding-top: 1rem;
+    }
+    .row { display: flex; gap: 0.75rem; }
+    input {
+      flex: 1;
+      border-radius: 1rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.05);
+      color: var(--fog);
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+    input::placeholder { color: rgba(154,148,168,0.7); }
+    button.send {
+      border: none;
+      border-radius: 1rem;
+      padding: 0.75rem 1.25rem;
+      background: rgba(161,199,179,0.25);
+      color: var(--sage);
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid rgba(161,199,179,0.3);
+    }
+    .hint {
+      margin-top: 0.5rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(154,148,168,0.7);
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      background: rgba(6,5,12,0.95);
+      backdrop-filter: blur(12px);
+      animation: fadeIn 0.4s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    .card {
+      max-width: 32rem;
+      width: 100%;
+      border-radius: 1.5rem;
+      border: 1px solid var(--line);
+      background: rgba(6,5,12,0.9);
+      padding: 1.5rem 2rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .eyebrow {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: rgba(191,166,255,0.8);
+    }
+    .card h2 {
+      margin: 0.75rem 0 0;
+      font-family: "Cormorant Garamond", serif;
+      font-size: 2rem;
+      font-weight: 500;
+    }
+    .card p.desc { color: var(--mist); font-size: 0.875rem; line-height: 1.6; margin: 1rem 0 0; }
+    .tel-primary, .tel-danger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 3.5rem;
+      margin-top: 1rem;
+      border-radius: 1rem;
+      text-decoration: none;
+      font-weight: 600;
+      color: var(--night);
+    }
+    .tel-primary { background: rgba(191,166,255,0.9); }
+    .tel-danger { background: rgba(232,93,93,0.9); font-size: 1.1rem; min-height: 4rem; }
+    .desktop-emergency {
+      margin-top: 2rem;
+      text-align: center;
+      border-radius: 1rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.05);
+      padding: 1.5rem;
+    }
+    .desktop-emergency .num {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 3.5rem;
+      margin-top: 1rem;
+      letter-spacing: 0.05em;
+    }
+    .desktop-venue {
+      margin-top: 0;
+      text-align: center;
+      border-radius: 1rem;
+      border: 1px solid rgba(191,166,255,0.3);
+      background: rgba(191,166,255,0.05);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .desktop-venue .num {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 2.5rem;
+      margin-top: 0.75rem;
+      letter-spacing: 0.05em;
+      color: var(--lavender);
+    }
+    .dismiss {
+      margin-top: 2rem;
+      width: 100%;
+      background: none;
+      border: none;
+      color: var(--mist);
+      font-size: 0.75rem;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.04);
+      color: var(--mist);
+      cursor: pointer;
+    }
+    .chip:hover { border-color: var(--lavender); color: var(--fog); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="auras"></div>
+  <div class="shell">
+    <header><h1>AngeLifeline</h1></header>
+    <main id="main">
+      <div class="messages" id="messages"></div>
+      <form id="form">
+        <div class="row">
+          <input id="input" placeholder="Type here — demo only, stays on device" autocomplete="off" />
+          <button type="submit" class="send">Send</button>
+        </div>
+        <p class="hint">Try a chip or type: panic at W Hotel · 救命</p>
+        <div class="chips">
+          <button type="button" class="chip" data-text="I'm feeling a bit anxious">Mild: anxious</button>
+          <button type="button" class="chip" data-text="panic at W Hotel">panic at W Hotel</button>
+          <button type="button" class="chip" data-text="救命">救命</button>
+          <button type="button" class="chip" data-text="heart attack">heart attack</button>
+        </div>
+      </form>
+    </main>
+  </div>
+  <div id="overlay" class="overlay hidden" role="alertdialog"></div>
+  <script>
+    const VENUES = [
+      { id: "w-hotel", keywords: ["w hotel", "w館", "w 酒店", "whotel"], labelEn: "W Hotel Control Room", labelZh: "W Hotel 控制室", tel: "37172222" },
+      { id: "clockenflap", keywords: ["clockenflap", "clokenflap", "中環海濱"], labelEn: "Clockenflap Event Medical", labelZh: "Clockenflap 活動醫療", tel: "999" },
+      { id: "disneyland", keywords: ["disneyland", "迪士尼", "disney"], labelEn: "Hong Kong Disneyland Guest Services", labelZh: "香港迪士尼賓客服務", tel: "35503388" }
+    ];
+    const EN_TERMS = ["panic","heart attack","suffocating","can't breathe","cannot breathe","overdose","suicide","kill myself","help me","emergency","911","999"];
+    const ZH_TERMS = ["痛","死","救命","窒息","喘唔到氣","喘不到氣","自殺","想死","過量","驚","好驚","panic"];
+    const HIGH_SEVERITY = ["heart attack","suffocating","can't breathe","cannot breathe","overdose","suicide","kill myself","窒息","喘唔到氣","想死","自殺","救命"];
+
+    function analyze(text) {
+      const n = text.toLowerCase().trim();
+      const matchedTerms = [];
+      EN_TERMS.forEach(t => { if (n.includes(t)) matchedTerms.push(t); });
+      ZH_TERMS.forEach(t => { if (text.includes(t) || n.includes(t.toLowerCase())) matchedTerms.push(t); });
+      const preferHongKong = ZH_TERMS.some(t => text.includes(t) || n.includes(t.toLowerCase()));
+      const highSeverity = matchedTerms.some(t => HIGH_SEVERITY.includes(t.toLowerCase()));
+      let matchedVenue = null;
+      for (const v of VENUES) {
+        for (const kw of v.keywords) {
+          if (n.includes(kw.toLowerCase())) { matchedVenue = v; break; }
+        }
+        if (matchedVenue) break;
+      }
+      return { triggered: matchedTerms.length > 0, highSeverity, preferHongKong, matchedVenue, matchedTerms };
+    }
+
+    function isTelephony() {
+      const ua = navigator.userAgent.toLowerCase();
+      return /iphone/.test(ua) || (/android/.test(ua) && /mobile/.test(ua) && !/tablet/.test(ua));
+    }
+
+    const messagesEl = document.getElementById("messages");
+    const mainEl = document.getElementById("main");
+    const overlayEl = document.getElementById("overlay");
+    const inputEl = document.getElementById("input");
+
+    function addBubble(role, content) {
+      const d = document.createElement("div");
+      d.className = "bubble " + role;
+      d.textContent = content;
+      messagesEl.appendChild(d);
+      d.scrollIntoView({ behavior: "smooth" });
+    }
+
+    addBubble("assistant", "This demo runs entirely in your browser. No conversation is sent to a server. If you're in immediate danger, use the lifeline when it appears or call 999.");
+
+    function showOverlay(analysis) {
+      const zh = analysis.preferHongKong;
+      const emergency = "999";
+      const telephony = isTelephony();
+      const venue = analysis.matchedVenue;
+      const showVenueLine = venue && venue.tel !== emergency;
+
+      let actions = "";
+      if (telephony) {
+        if (showVenueLine) {
+          actions += `<a class="tel-primary" href="tel:${venue.tel}">📞 Direct line // ${zh ? venue.labelZh : venue.labelEn}</a>`;
+        }
+        actions += `<a class="tel-danger" href="tel:${emergency}">📞 ${zh ? "香港緊急服務 (999)" : "Call HK Emergency (999)"}</a>`;
+        actions += `<p class="desc" style="text-align:center;font-size:0.75rem">${zh ? "香港 999 支援英文及普通話接線生。" : "Hong Kong 999 fully supports English and Mandarin operators."}</p>`;
+      } else {
+        if (showVenueLine) {
+          actions += `<div class="desktop-venue"><p class="desc">${zh ? "場地 / 活動線路" : "Event / venue line"}</p><p style="margin-top:0.5rem;font-weight:500;color:var(--fog)">${zh ? venue.labelZh : venue.labelEn}</p><p class="num">${venue.tel}</p></div>`;
+        }
+        actions += `<div class="desktop-emergency"><p class="desc">${zh ? "此裝置可能無法直接撥打電話。" : "This device may not place phone calls directly."}</p><p class="desc" style="font-size:0.75rem;margin-top:0.5rem">${zh ? "緊急服務" : "Emergency services"}</p><p class="num">${emergency}</p></div>`;
+      }
+
+      overlayEl.innerHTML = `
+        <div class="card">
+          <p class="eyebrow">AngeLifeline</p>
+          <h2>${zh ? "我哋喺度，先處理安全" : "You're not alone — safety first"}</h2>
+          <p class="desc">${zh ? "呢個介面唔係醫療或執法服務。如果你或他人有即時危險，請致電緊急號碼。" : "This is not medical or law enforcement. If anyone is in immediate danger, use emergency numbers below."}</p>
+          ${actions}
+          <button type="button" class="dismiss">${zh ? "我而家安全，返回對話（演示）" : "I'm safe — return to chat (demo)"}</button>
+        </div>`;
+      overlayEl.classList.remove("hidden");
+      mainEl.classList.add("blurred");
+      overlayEl.querySelector(".dismiss").onclick = () => {
+        overlayEl.classList.add("hidden");
+        mainEl.classList.remove("blurred");
+      };
+    }
+
+    function send(text) {
+      text = text.trim();
+      if (!text) return;
+      addBubble("user", text);
+      inputEl.value = "";
+      const analysis = analyze(text);
+      if (analysis.triggered && analysis.highSeverity) {
+        showOverlay(analysis);
+        return;
+      }
+      addBubble("assistant", analysis.triggered
+        ? "Thank you for sharing that. (Demo reply.) Opening lifeline…"
+        : "Thank you for sharing that. This is a local demo reply. Try a distress phrase — e.g. panic at W Hotel or 救命.");
+      if (analysis.triggered && !analysis.highSeverity) {
+        setTimeout(() => showOverlay(analysis), 400);
+      }
+    }
+
+    document.getElementById("form").onsubmit = (e) => { e.preventDefault(); send(inputEl.value); };
+    document.querySelectorAll(".chip").forEach(btn => {
+      btn.onclick = () => send(btn.dataset.text);
+    });
+  </script>
+</body>
+</html>
