@@ -1,5 +1,8 @@
 import { emergencyDisplayFromCountryCode } from "./country-emergency";
-import { isSuicidalCrisis } from "./crisis-focus";
+import {
+  inferCrisisFocus,
+  type CrisisFocus,
+} from "./crisis-focus";
 import type { EmergencyDisplay } from "./emergency-routing";
 import type { UiLocale } from "./locale";
 import { textContainsSimplifiedChinese } from "./simplified-chinese";
@@ -51,6 +54,8 @@ const CANTONESE_MARKERS = [
   "咋",
   "囉",
   "喘唔到",
+  "抖唔到",
+  "抖到冇",
 ];
 
 function hasHint(text: string, lower: string, hints: string[]): boolean {
@@ -62,16 +67,21 @@ function hasCjk(text: string): boolean {
 }
 
 /**
- * When suicide crisis has no place, infer which Chinese crisis lines to show.
+ * When crisis has no place, infer which Chinese crisis lines to show.
  * Simplified → mainland China; Traditional → HK + Taiwan (or one if disambiguated).
  */
 export function inferChineseCrisisHelplineLocale(
   chatSnippet: string,
   uiLocale?: UiLocale,
+  crisisFocus?: CrisisFocus,
 ): ChineseCrisisHelplineLocale | undefined {
   const text = chatSnippet.trim();
   if (!text) return undefined;
-  if (!isSuicidalCrisis(text) && uiLocale !== "zh-Hant") {
+
+  const focus = crisisFocus ?? inferCrisisFocus(text);
+  const crisisRelevant =
+    focus === "suicide" || focus === "medical" || focus === "mixed";
+  if (!crisisRelevant && uiLocale !== "zh-Hant") {
     return undefined;
   }
 
@@ -126,4 +136,33 @@ export function primaryEmergencyDisplaysForChineseLocale(
     default:
       return [];
   }
+}
+
+const LANGUAGE_EMS_NOTE_EN =
+  "Inferred from the language in your message — share your city or country in chat to confirm.";
+const LANGUAGE_EMS_NOTE_ZH =
+  "按你訊息用嘅文字推斷 — 喺對話講城市或國家可以確認更啱嘅號碼。";
+
+/** EMS digits when chat has no place hint but Cantonese / Chinese / UI locale suggests a region. */
+export function inferPrimaryEmergencyFromLanguage(
+  chatSnippet: string,
+  uiLocale: UiLocale,
+  crisisFocus?: CrisisFocus,
+): EmergencyDisplay[] {
+  const chineseLocale = inferChineseCrisisHelplineLocale(
+    chatSnippet,
+    uiLocale,
+    crisisFocus,
+  );
+  if (!chineseLocale) return [];
+
+  return primaryEmergencyDisplaysForChineseLocale(chineseLocale).map((d) => ({
+    ...d,
+    subnoteEn: d.subnoteEn
+      ? `${d.subnoteEn} ${LANGUAGE_EMS_NOTE_EN}`
+      : LANGUAGE_EMS_NOTE_EN,
+    subnoteZh: d.subnoteZh
+      ? `${d.subnoteZh} ${LANGUAGE_EMS_NOTE_ZH}`
+      : LANGUAGE_EMS_NOTE_ZH,
+  }));
 }

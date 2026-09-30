@@ -34,6 +34,7 @@ export async function resolveCrisisHelplines(options: {
       const chineseLocale = inferChineseCrisisHelplineLocale(
         options.chatSnippet,
         options.uiLocale,
+        options.crisisFocus,
       );
       if (chineseLocale) {
         let lines = fallbackSuicideHelplinesForChineseLocale(chineseLocale);

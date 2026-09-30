@@ -13,14 +13,14 @@ export type AngeLifelineEmbedDisclaimer = {
 
 const overlayEn: AngeLifelineOverlayDisclaimer = {
   scope:
-    "This is not medical or law enforcement. Use emergency services for immediate danger; for suicidal thoughts, use crisis lines below.",
+    "This is not medical or law enforcement. Use emergency services for immediate danger; for emotional crisis, use the support lines below.",
   accuracy:
     "Numbers here are suggestions from chat context and automated lookup — not verified dispatch. If anything looks wrong, call your local emergency number directly.",
 };
 
 const overlayZhHant: AngeLifelineOverlayDisclaimer = {
   scope:
-    "呢個介面唔係醫療或執法服務。如有即時危險請用緊急服務；如果係想死或情緒危機，下面有專門熱線。",
+    "呢個介面唔係醫療或執法服務。如有即時危險請用緊急服務；如果係情緒危機，下面有專門熱線。",
   accuracy:
     "以下號碼係按對話同自動查詢建議，未必準確或完整；如有疑問請直接致電當地緊急服務。",
 };

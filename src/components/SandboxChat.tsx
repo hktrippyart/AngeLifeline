@@ -5,6 +5,7 @@ import { AmbientBackground } from "@/components/AmbientBackground";
 import { AngeLifelineOverlay } from "@angelifeline/react";
 import {
   analyzeForRedFlag,
+  detectHardCrisis,
   classifyDeviceTelephony,
   extractRegionHint,
   fetchCrisisHelplines,
@@ -91,6 +92,8 @@ export function SandboxChat() {
       emergencyRegion,
       locationKnown,
       crisisFocus: inferCrisisFocus(text),
+      triggered: redFlag.triggered || detectHardCrisis(text),
+      highSeverity: redFlag.highSeverity || detectHardCrisis(text),
     };
   }
 
@@ -156,12 +159,24 @@ export function SandboxChat() {
     setInput("");
 
     const analysis = buildAnalysis(text);
+
+    if (analysis.highSeverity) {
+      void openLifeline(
+        {
+          ...analysis,
+          triggered: true,
+          highSeverity: true,
+        },
+        text,
+      );
+    }
+
     const triage = await fetchCrisisTriage({
       lastUserText: text,
       chatSnippet: text,
     });
 
-    if (triage?.hardCrisis) {
+    if (triage?.hardCrisis && !analysis.highSeverity) {
       void openLifeline(
         {
           ...analysis,
@@ -171,7 +186,6 @@ export function SandboxChat() {
         },
         text,
       );
-      return;
     }
 
     const reply: Message = {
@@ -181,7 +195,7 @@ export function SandboxChat() {
     };
     setMessages((prev) => [...prev, reply]);
 
-    if (analysis.triggered && !analysis.highSeverity) {
+    if (analysis.triggered && !analysis.highSeverity && !triage?.hardCrisis) {
       setTimeout(() => void openLifeline(analysis, text), 400);
     }
   }

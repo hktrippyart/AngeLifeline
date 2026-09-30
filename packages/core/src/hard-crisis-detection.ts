@@ -5,7 +5,7 @@ const CRISIS_PATTERNS: RegExp[] = [
   /\b(overdose|od'd|can't breathe|cant breathe|not breathing|chest pain|heart attack)\b/i,
   /\b(seizure|unconscious|passed out|won't wake|vomiting blood)\b/i,
   /(自殺|想死|結束生命|傷害自己|自殘|割腕)/,
-  /(過量|唔夠氣|呼吸困難|胸口痛|心臟病|抽搐|昏迷|醒唔到|嘔血|窒息|喘唔到氣|喘不到氣|透唔到氣|透不到氣)/,
+  /(過量|唔夠氣|呼吸困難|胸口痛|心臟病|抽搐|昏迷|醒唔到|嘔血|窒息|喘唔到氣|喘不到氣|透唔到氣|透不到氣|抖唔到氣|抖到唔到氣|抖到冇氣|抖嗰到氣|抖唔到气)/,
 ];
 
 export function normalizeCrisisInput(text: string): string {
