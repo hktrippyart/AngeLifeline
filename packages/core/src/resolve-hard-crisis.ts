@@ -9,7 +9,10 @@ export type HardCrisisResolution = {
   geminiEscalate: boolean;
 };
 
-/** Hard crisis for overlay + host chat: rules first, then Gemini triage. */
+/**
+ * Overlay + host chat crisis gate: keyword fast-path OR Gemini semantic triage
+ * on recent user context (`chatSnippet`). Requires `GEMINI_API_KEY` for paraphrases.
+ */
 export async function resolveHardCrisis(options: {
   lastUserText: string;
   chatSnippet: string;
@@ -17,24 +20,26 @@ export async function resolveHardCrisis(options: {
   const rulesMatch = detectHardCrisis(options.lastUserText);
   const chatForFocus = `${options.lastUserText}\n${options.chatSnippet}`;
 
-  if (rulesMatch) {
-    return {
-      hardCrisis: true,
-      crisisFocus: inferCrisisFocus(chatForFocus),
-      rulesMatch: true,
-      geminiEscalate: false,
-    };
-  }
-
   const triage = await assessCrisisWithGemini({
     chatSnippet: options.chatSnippet,
   });
 
   const geminiEscalate = Boolean(triage?.escalate);
+  const hardCrisis = rulesMatch || geminiEscalate;
+
   return {
-    hardCrisis: geminiEscalate,
-    crisisFocus: triage?.crisisFocus ?? inferCrisisFocus(chatForFocus),
-    rulesMatch: false,
+    hardCrisis,
+    crisisFocus:
+      triage?.crisisFocus ??
+      inferCrisisFocus(chatForFocus),
+    rulesMatch,
     geminiEscalate,
   };
+}
+
+/** Host UI: open AngeLifeline overlay when triage says hard crisis (after fetchCrisisTriage). */
+export function shouldOpenAngeLifelineOverlay(
+  resolution: HardCrisisResolution,
+): boolean {
+  return resolution.hardCrisis;
 }
