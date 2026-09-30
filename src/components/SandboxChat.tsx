@@ -20,6 +20,7 @@ import {
   type DeviceTelephonyClass,
   type RedFlagAnalysis,
   type SecondaryLine,
+  fetchCrisisTriage,
   type UiLocale,
 } from "@angelifeline/core";
 
@@ -142,7 +143,7 @@ export function SandboxChat() {
     }
   }
 
-  function send() {
+  async function send() {
     const text = input.trim();
     if (!text) return;
 
@@ -155,6 +156,24 @@ export function SandboxChat() {
     setInput("");
 
     const analysis = buildAnalysis(text);
+    const triage = await fetchCrisisTriage({
+      lastUserText: text,
+      chatSnippet: text,
+    });
+
+    if (triage?.hardCrisis) {
+      void openLifeline(
+        {
+          ...analysis,
+          triggered: true,
+          highSeverity: true,
+          crisisFocus: triage.crisisFocus,
+        },
+        text,
+      );
+      return;
+    }
+
     if (analysis.triggered && analysis.highSeverity) {
       void openLifeline(analysis, text);
       return;

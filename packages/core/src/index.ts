@@ -76,6 +76,23 @@ export {
   type RedFlagAnalysis,
 } from "./red-flag-analyzer";
 
+export {
+  detectHardCrisis,
+  normalizeCrisisInput,
+} from "./hard-crisis-detection";
+
+export {
+  assessCrisisWithGemini,
+  type GeminiCrisisTriage,
+} from "./gemini-crisis-triage";
+
+export {
+  resolveHardCrisis,
+  type HardCrisisResolution,
+} from "./resolve-hard-crisis";
+
+export { fetchCrisisTriage } from "./fetch-crisis-triage";
+
 export { resolveCrisisHelplines } from "./resolve-crisis-helplines";
 export { resolveVenueForCrisis } from "./resolve-venue-for-crisis";
 

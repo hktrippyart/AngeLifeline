@@ -1,15 +1,16 @@
 {
   "name": "@angelifeline/next",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Next.js App Router handlers for AngeLifeline venue and crisis APIs.",
   "license": "MIT",
   "type": "module",
   "exports": {
     "./venue-lookup": "./src/venue-lookup.ts",
-    "./crisis-helplines": "./src/crisis-helplines.ts"
+    "./crisis-helplines": "./src/crisis-helplines.ts",
+    "./crisis-triage": "./src/crisis-triage.ts"
   },
   "dependencies": {
-    "@angelifeline/core": "0.2.0",
+    "@angelifeline/core": "0.3.0",
     "zod": "^4.6.5"
   },
   "peerDependencies": {
