@@ -1,4 +1,5 @@
 import { emergencyDisplayFromSearch } from "./country-emergency";
+import { inferPrimaryEmergencyFromLanguage } from "./crisis-language-locale";
 import { inferCrisisFocus } from "./crisis-focus";
 import { crisisSearchQuery } from "./fetch-secondary-lines";
 import { resolveLiveEventLookup } from "./festival-places";
@@ -46,6 +47,7 @@ function buildLocationHints(chatSnippet: string) {
 
 function primaryEmsForOverlay(options: {
   chatSnippet: string;
+  uiLocale: UiLocale;
   regionHint?: string;
   emergencyRegion?: ReturnType<typeof inferEmergencyRegion>;
   countryCode?: string;
@@ -68,7 +70,11 @@ function primaryEmsForOverlay(options: {
   if (display.number && !display.locationUnknown) {
     return [display];
   }
-  return [];
+  return inferPrimaryEmergencyFromLanguage(
+    options.chatSnippet,
+    options.uiLocale,
+    options.crisisFocus,
+  );
 }
 
 /** Same numbers as AngeLifeline — injected into crisis chat turns for the model to quote. */
@@ -133,6 +139,7 @@ export async function buildAngeLifelineNumbersBlockForChat(options: {
 
   const ems = primaryEmsForOverlay({
     chatSnippet: snippet,
+    uiLocale: options.uiLocale,
     regionHint,
     emergencyRegion,
     countryCode: countryCode ?? helplines.countryCode?.toUpperCase(),

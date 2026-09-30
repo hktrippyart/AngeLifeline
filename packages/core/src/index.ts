@@ -21,6 +21,7 @@ export { inferCrisisFocus, isSuicidalCrisis } from "./crisis-focus";
 
 export {
   inferChineseCrisisHelplineLocale,
+  inferPrimaryEmergencyFromLanguage,
   primaryEmergencyDisplaysForChineseLocale,
   type ChineseCrisisHelplineLocale,
 } from "./crisis-language-locale";

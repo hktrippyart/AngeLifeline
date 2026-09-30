@@ -1,11 +1,14 @@
 {
   "name": "@angelifeline/core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "AngeLifeline crisis routing, helplines, and location policy (server + client helpers).",
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./hard-crisis-detection": "./src/hard-crisis-detection.ts",
+    "./fetch-crisis-triage": "./src/fetch-crisis-triage.ts",
+    "./resolve-hard-crisis": "./src/resolve-hard-crisis.ts"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",

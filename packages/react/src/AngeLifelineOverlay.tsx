@@ -7,6 +7,7 @@ import type { DeviceTelephonyClass } from "@angelifeline/core";
 import type { SecondaryLine } from "@angelifeline/core";
 import {
   findAHelplineUrl,
+  inferPrimaryEmergencyFromLanguage,
   resolveEmergencyDisplay,
   type EmergencyDisplay,
 } from "@angelifeline/core";
@@ -61,7 +62,15 @@ export function AngeLifelineOverlay({
   });
   const emergency = emergencyDisplay.number;
   const locationUnknown = emergencyDisplay.locationUnknown === true;
-  const languagePrimaryEms = crisisHelplines?.primaryEmergency ?? [];
+  const languageInferredEms = inferPrimaryEmergencyFromLanguage(
+    chatSnippet ?? "",
+    uiLocale,
+    analysis.crisisFocus,
+  );
+  const languagePrimaryEms =
+    crisisHelplines?.primaryEmergency?.length
+      ? crisisHelplines.primaryEmergency
+      : languageInferredEms;
 
   const primaryEmsDisplays: EmergencyDisplay[] = (() => {
     if (!locationUnknown && emergency) {
