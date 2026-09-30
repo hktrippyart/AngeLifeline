@@ -174,11 +174,6 @@ export function SandboxChat() {
       return;
     }
 
-    if (analysis.triggered && analysis.highSeverity) {
-      void openLifeline(analysis, text);
-      return;
-    }
-
     const reply: Message = {
       id: `a-${Date.now()}`,
       role: "assistant",

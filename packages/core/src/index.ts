@@ -93,6 +93,8 @@ export {
 
 export { fetchCrisisTriage } from "./fetch-crisis-triage";
 
+export { shouldOpenAngeLifelineOverlay } from "./resolve-hard-crisis";
+
 export { resolveCrisisHelplines } from "./resolve-crisis-helplines";
 export { resolveVenueForCrisis } from "./resolve-venue-for-crisis";
 
