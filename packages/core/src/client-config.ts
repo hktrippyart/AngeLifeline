@@ -1,11 +1,13 @@
 export type AngeLifelineApiPaths = {
   venueLookup: string;
   crisisHelplines: string;
+  crisisTriage: string;
 };
 
 const DEFAULT_PATHS: AngeLifelineApiPaths = {
   venueLookup: "/api/angelifeline/venue-lookup",
   crisisHelplines: "/api/angelifeline/crisis-helplines",
+  crisisTriage: "/api/angelifeline/crisis-triage",
 };
 
 let paths: AngeLifelineApiPaths = { ...DEFAULT_PATHS };

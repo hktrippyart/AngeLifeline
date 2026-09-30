@@ -59,6 +59,9 @@ export { POST } from "@angelifeline/next/venue-lookup";
 
 // app/api/angelifeline/crisis-helplines/route.ts
 export { POST } from "@angelifeline/next/crisis-helplines";
+
+// app/api/angelifeline/crisis-triage/route.ts
+export { POST } from "@angelifeline/next/crisis-triage";
 ```
 
 ### 4. Environment
@@ -70,6 +73,23 @@ THROUGHLINE_CLIENT_ID=       # optional live suicide/crisis lines (OAuth)
 THROUGHLINE_CLIENT_SECRET=
 # Or: FINDAHELPLINE_CLIENT_ID / FINDAHELPLINE_CLIENT_SECRET
 ```
+
+
+### 5a. Semantic crisis triage (recommended)
+
+Keyword lists miss paraphrases. Mount the triage route and call it before opening the overlay (or use the same `resolveHardCrisis` on your chat API):
+
+```ts
+import { fetchCrisisTriage, resolveHardCrisis } from "@angelifeline/core";
+
+// Client (needs POST route + GEMINI_API_KEY on server):
+const triage = await fetchCrisisTriage({ lastUserText, chatSnippet });
+
+// Server inside your chat handler:
+const { hardCrisis, crisisFocus } = await resolveHardCrisis({ lastUserText, chatSnippet });
+```
+
+When `hardCrisis` is true, open `AngeLifelineOverlay` with `triggered` and `highSeverity` set.
 
 ### 5. Wire the overlay in chat
 
