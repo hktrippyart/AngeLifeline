@@ -2,7 +2,7 @@
 // 如果用 vitest／jest：將頭兩行 import 改成對應嘅 describe/it/expect，邏輯唔使改。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectRules, decide, checkMessage, normalizeText } from "./angelifeline-rules.ts";
+import { detectRules, decide, checkMessage, normalizeText } from "./angelifeline-rules";
 
 const level = (s: string) => detectRules(s).level;
 
