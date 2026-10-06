@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./hard-crisis-detection": "./src/hard-crisis-detection.ts",
     "./fetch-crisis-triage": "./src/fetch-crisis-triage.ts",
-    "./resolve-hard-crisis": "./src/resolve-hard-crisis.ts"
+    "./resolve-hard-crisis": "./src/resolve-hard-crisis.ts",
+    "./angelifeline-rules": "./src/angelifeline-rules.ts"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",
@@ -25,5 +26,8 @@
   "bugs": {
     "url": "https://github.com/hktrippyart/AngeLifeline/issues"
   },
-  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme"
+  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme",
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/angelifeline-rules.test.ts"
+  }
 }

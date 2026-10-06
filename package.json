@@ -11,7 +11,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npm run test -w @angelifeline/core"
   },
   "dependencies": {
     "@angelifeline/core": "workspace:*",

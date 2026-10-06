@@ -18,6 +18,7 @@ PRs are welcome. Prefer **small, focused** changes (one fix or feature per PR).
    npm install
    npm run dev          # optional: manual check of the sandbox
    npm run lint
+   npm test             # rule-based crisis detection
    npm run build        # required before you open a PR
    ```
 

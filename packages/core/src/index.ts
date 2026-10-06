@@ -83,6 +83,20 @@ export {
 } from "./hard-crisis-detection";
 
 export {
+  RULES,
+  checkMessage,
+  decide,
+  detectRules,
+  normalizeText,
+  type Category,
+  type DecideOptions,
+  type Decision,
+  type Level,
+  type RuleHit,
+  type RuleResult,
+} from "./angelifeline-rules";
+
+export {
   assessCrisisWithGemini,
   type GeminiCrisisTriage,
 } from "./gemini-crisis-triage";
