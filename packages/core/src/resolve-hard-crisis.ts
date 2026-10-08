@@ -86,7 +86,6 @@ export async function resolveHardCrisis(options: {
       crisisFocusFromCategories(Array.from(categories) as Category[], chatForFocus),
     rulesMatch:
       legacyMatch ||
-      ruleResult.level === "high" ||
       decision.reason === "rule_high" ||
       decision.reason === "rule_review+model" ||
       decision.reason === "rule_review_model_unavailable",
