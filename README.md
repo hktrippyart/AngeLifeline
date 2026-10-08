@@ -8,11 +8,101 @@ Monorepo:
 
 | Package | Use |
 |---------|-----|
-| `@angelifeline/core` | Routing, helplines, client fetch helpers, server resolvers |
+| `@angelifeline/core` | Rules engine, crisis pipeline, PII mask, judge server, routing, helplines |
 | `@angelifeline/react` | `AngeLifelineOverlay` UI |
 | `@angelifeline/next` | App Router `POST` handlers for venue + crisis APIs |
 
 This repo’s Next.js app is a **live sandbox** (`npm run dev`).
+
+---
+
+## Crisis detection (how it works)
+
+Detection is **layered**. Design goals: **never miss obvious literal crisis wording**, **do not send raw PII to the LLM**, and **never show an empty overlay** if the model fails.
+
+| Step | Where | What |
+|------|--------|------|
+| **1. Rules (raw text)** | Browser or server | `detectRules()` on the **original** user message. **`high`** (e.g. explicit self-harm, violence, or medical emergency wording in English, Chinese, or mixed input) → open overlay **immediately**—no LLM, no network. |
+| **2. PII mask** | Browser, then server again | `maskPII()` strips common identifiers (email, HK/CN ID patterns, Luhn-valid cards, long phone numbers). Short codes like **999** / **112** are not masked. |
+| **3. LLM judge** | Server only | `POST /api/angelifeline/judge` receives **already masked** text, masks again, calls Gemini with a fixed JSON schema (`urgent` / `concern` / `none`). Temperature **0**, server timeout ~**2.5s** (client race ~**3s**). |
+| **4. Merge** | `processMessage()` or `resolveHardCrisis()` | **Overlay**: rule `high`, judge `urgent`, or rule `review` + judge `concern` (configurable). **Soft prompt**: judge `concern` without escalation. |
+| **5. Fail-safe** | Same | Judge timeout, error, block, or invalid JSON → treat as unavailable; **review** rules still escalate; **static EMS table** always fills the overlay (AI lookup never replaces primary emergency digits). |
+
+**Important:** Rule **`high`** cannot be overridden by the LLM (the judge is not called on that path).
+
+### Recommended client flow
+
+Use the **pipeline** in the browser so steps 1–5 and location follow-up stay in one place:
+
+```ts
+import {
+  createSession,
+  processMessage,
+  createHttpJudge,
+  createHttpLookup,
+} from "@angelifeline/core/angelifeline-pipeline";
+import { detectRules } from "@angelifeline/core/angelifeline-rules";
+import { maskPII } from "@angelifeline/core/angelifeline-mask";
+import { configureAngeLifelineApi } from "@angelifeline/core";
+
+configureAngeLifelineApi({
+  judge: "/api/angelifeline/judge",
+  venueLookup: "/api/angelifeline/venue-lookup",
+});
+
+const session = createSession();
+
+const { action, followUp, debug } = await processMessage(session, userText, {
+  detectRules,
+  maskPII,
+  judge: createHttpJudge("/api/angelifeline/judge"),
+  lookup: createHttpLookup("/api/angelifeline/venue-lookup"),
+  env: {
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    locale: navigator.language,
+  },
+  config: {
+    siteRegion: "HK",
+    judgeTimeoutMs: 3000,
+    knownEvents: [{ name: "Clockenflap Festival", region: "HK" }],
+  },
+});
+
+// action.type: "overlay" | "overlay_update" | "soft_prompt" | "none"
+// followUp: optional Promise when venue/event lookup finishes in the background
+```
+
+`debug` intentionally **does not** include user message text (only rule ids, judge status, region guess).
+
+### Server-only gate (chat API / triage route)
+
+If you prefer one server round-trip instead of the browser judge:
+
+```ts
+import { resolveHardCrisis } from "@angelifeline/core/resolve-hard-crisis";
+
+const { hardCrisis, softPrompt, crisisFocus, rulesMatch, geminiEscalate } =
+  await resolveHardCrisis({ lastUserText, chatSnippet });
+```
+
+Same merge logic as the pipeline: rules first, then masked judge on the server.
+
+Legacy **`fetchCrisisTriage`** → `POST /api/angelifeline/crisis-triage` still works and uses `resolveHardCrisis`.
+
+### Emergency numbers vs AI search
+
+- **Primary EMS** comes from a **static, hand-verifiable table** in `angelifeline-pipeline.ts` (`EMS`, plus universal **112** note). Set `EMS_LAST_VERIFIED` after you audit numbers.
+- **Region guess** when the user has not named a place: timezone → browser locale → `detectLang()` on the message → `siteRegion`.
+- **Known place / event** in text → higher confidence region; optional **venue lookup** sends **only the place hint** (not the full chat) to your existing venue route. AI-returned numbers are **extras** with “verify” framing—they **do not** replace static EMS.
+- After an overlay opens **without** a known place, the pipeline **watches the next few user messages** for location hints and can emit `overlay_update`.
+
+### PII masking limits
+
+Document honestly: masking catches **formatted** identifiers, not names, addresses, or free-text medical detail. Say “common identifiers removed,” not “fully anonymous.” See `angelifeline-mask.ts`.
+
+### Judge prompt
+
+System prompt lives in `angelifeline-judge-prompt.ts` (`JUDGE_PROMPT_VERSION`). Keep it in sync with any offline eval notebook before changing behavior.
 
 ---
 
@@ -38,6 +128,8 @@ Local monorepo link example:
 }
 ```
 
+Submodule example (trip-sitter): see host repo `docs/ANGELIFELINE_SUBMODULE.md`.
+
 ### 2. Transpile packages
 
 ```ts
@@ -51,6 +143,8 @@ const nextConfig = {
 };
 ```
 
+Hosts using TypeScript path aliases to `vendor/AngeLifeline/packages/core/src/*` should **exclude** `vendor/**/*.test.ts` from the app typecheck.
+
 ### 3. Mount API routes
 
 ```ts
@@ -62,36 +156,35 @@ export { POST } from "@angelifeline/next/crisis-helplines";
 
 // app/api/angelifeline/crisis-triage/route.ts
 export { POST } from "@angelifeline/next/crisis-triage";
+
+// app/api/angelifeline/judge/route.ts — LLM triage on masked text only
+import { handleJudgePost } from "@angelifeline/core/angelifeline-judge-server";
+export const runtime = "nodejs";
+export async function POST(request: Request) {
+  return handleJudgePost(request);
+}
 ```
 
 ### 4. Environment
 
 ```env
-GEMINI_API_KEY=              # country/EMS + search grounding
+GEMINI_API_KEY=              # judge + venue search grounding (server only)
+GEMINI_JUDGE_MODEL=          # optional; default gemini-2.5-flash (pin a version in prod)
+GEMINI_MODEL_NAME=           # fallback model id if JUDGE_MODEL unset
+JUDGE_TIMEOUT_MS=2500        # server; keep below client pipeline timeout (~3000)
+RATE_LIMIT_SECRET=           # optional; enables per-IP rate limit on /judge
+
 GOOGLE_MAPS_API_KEY=         # optional Places (address/country only)
 THROUGHLINE_CLIENT_ID=       # optional live suicide/crisis lines (OAuth)
 THROUGHLINE_CLIENT_SECRET=
 # Or: FINDAHELPLINE_CLIENT_ID / FINDAHELPLINE_CLIENT_SECRET
 ```
 
-
-### 5a. Semantic crisis triage (recommended)
-
-Keyword lists miss paraphrases. Mount the triage route and call it before opening the overlay (or use the same `resolveHardCrisis` on your chat API):
-
-```ts
-import { fetchCrisisTriage, resolveHardCrisis } from "@angelifeline/core";
-
-// Client (needs POST route + GEMINI_API_KEY on server):
-const triage = await fetchCrisisTriage({ lastUserText, chatSnippet });
-
-// Server inside your chat handler:
-const { hardCrisis, crisisFocus } = await resolveHardCrisis({ lastUserText, chatSnippet });
-```
-
-When `hardCrisis` is true, open `AngeLifelineOverlay` with `triggered` and `highSeverity` set.
+Without `GEMINI_API_KEY`, the judge fails closed into **rules-only** behavior (literal **high** rules and **review** fail-safe still work).
 
 ### 5. Wire the overlay in chat
+
+On `action.type === "overlay"`, open `AngeLifelineOverlay` with `triggered` and `highSeverity`. Map pipeline `categories` to your `crisisFocus` (`self_harm` → suicide, etc.). On `soft_prompt`, show a gentle in-chat nudge (no full overlay).
 
 ```tsx
 "use client";
@@ -102,31 +195,18 @@ import {
   classifyDeviceTelephony,
   fetchCrisisHelplines,
   resolveSecondaryLines,
-  inferCrisisFocus,
-  hasResolvablePlaceHint,
 } from "@angelifeline/core";
-
-// On red-flag: set analysis state, call resolveSecondaryLines({ chatSnippet })
-// and fetchCrisisHelplines({ chatSnippet, crisisFocus, uiLocale, ... })
-// Render <AngeLifelineOverlay uiLocale="en" analysis={...} ... />
+// + processMessage / createHttpJudge as above
 ```
 
-Default client fetch paths:
+Default client API paths (override with `configureAngeLifelineApi`):
 
-- `/api/angelifeline/venue-lookup`
-- `/api/angelifeline/crisis-helplines`
-
-Override once on the client:
-
-```ts
-import { configureAngeLifelineApi } from "@angelifeline/core";
-
-configureAngeLifelineApi({
-  venueLookup: "/api/my-prefix/venue",
-  crisisHelplines: "/api/my-prefix/crisis",
-});
-```
-
+| Path | Purpose |
+|------|---------|
+| `/api/angelifeline/judge` | Masked LLM verdict |
+| `/api/angelifeline/venue-lookup` | Place/event hint → secondary lines |
+| `/api/angelifeline/crisis-helplines` | Suicide/crisis talk lines |
+| `/api/angelifeline/crisis-triage` | Server `resolveHardCrisis` JSON |
 
 ### 5b. User disclaimer (required for embedders)
 
@@ -135,12 +215,6 @@ Show scope **before chat** — not only when the overlay opens. Use copy from `@
 ```tsx
 import { AngeLifelineEmbedDisclaimer } from "@angelifeline/react";
 import { getAngeLifelineEmbedDisclaimer } from "@angelifeline/core";
-
-// In your pre-chat modal:
-<AngeLifelineEmbedDisclaimer uiLocale="en" />
-
-// Or merge into your terms:
-const { title, paragraphs, acknowledgeLabel } = getAngeLifelineEmbedDisclaimer("en");
 ```
 
 See [docs/DISCLAIMER.md](./docs/DISCLAIMER.md).
@@ -151,22 +225,36 @@ If your backend streams Gemini replies on hard crisis, inject the same numbers t
 
 ```ts
 import { buildAngeLifelineNumbersBlockForChat } from "@angelifeline/core";
+```
 
-const block = await buildAngeLifelineNumbersBlockForChat({
-  chatSnippet,
-  uiLocale: "en",
-});
-// append `block` to the model system prompt or final user message
+---
+
+## Core modules (reference)
+
+| Module | Role |
+|--------|------|
+| `angelifeline-rules.ts` | Multilingual rule engine (`high` / `review`) |
+| `angelifeline-mask.ts` | Client/server PII redaction |
+| `angelifeline-pipeline.ts` | Browser orchestration, static EMS, place hints, session |
+| `angelifeline-judge-prompt.ts` | Classifier system prompt |
+| `angelifeline-judge-server.ts` | Gemini judge + `handleJudgePost` |
+| `resolve-hard-crisis.ts` | Server merge (rules + judge) |
+
+Tests (Node 22.6+):
+
+```bash
+cd packages/core && npm test
+# angelfeline-rules.test.ts + angelfeline-pipeline.test.ts
 ```
 
 ---
 
 ## Routing policy (what we ship)
 
-- **EMS** from ISO country + search — always shown in overlay when policy requires (including suicide-without-place primary EMS).
-- **Suicide / mixed** without GPS: 繁中 → HK+TW helplines + primary EMS; 简体 → China; ThroughLine when configured.
+- **EMS** from static pipeline table + inference policy; host apps may layer ISO country + ThroughLine as in earlier integrations.
+- **Suicide / mixed** without GPS: host-specific helpline policy (locale, country inference, ThroughLine when configured).
 - **Places** for location context only — **no** front-desk POI `tel:` as “event lines.”
-- **Venue lookup** runs Gemini search on each lifeline refresh when chat text exists (unless suicide-only with no place hint).
+- **Venue lookup** may use Gemini search on **place hints**; full chat is not required for the pipeline lookup adapter.
 
 See [docs/DEPRECATED.md](./docs/DEPRECATED.md) for removed `venues.json` demo behavior.
 
@@ -186,7 +274,7 @@ Open `/` for the sandbox chat.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) — issues and PRs welcome; run `npm run build` before submitting a PR.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) — issues and PRs welcome; run `npm run build` and `cd packages/core && npm test` before submitting a PR.
 
 ## License
 
