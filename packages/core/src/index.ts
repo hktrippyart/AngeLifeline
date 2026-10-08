@@ -101,6 +101,31 @@ export {
   type GeminiCrisisTriage,
 } from "./gemini-crisis-triage";
 
+export { maskPII, MASK_LIMITS, type MaskCounts } from "./angelifeline-mask";
+
+export { JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT } from "./angelifeline-judge-prompt";
+
+export { handleJudgePost, judgeMaskedText } from "./angelifeline-judge-server";
+
+export {
+  DEFAULT_CONFIG as PIPELINE_DEFAULT_CONFIG,
+  EMS as PIPELINE_EMS,
+  UNIVERSAL as PIPELINE_UNIVERSAL_EMS,
+  buildCard,
+  createHttpJudge,
+  createHttpLookup,
+  createSession,
+  detectLang,
+  extractPlaceHint,
+  parseVerdict,
+  processMessage,
+  type Action,
+  type EmsCard,
+  type PipelineConfig,
+  type PipelineDeps,
+  type Session,
+} from "./angelifeline-pipeline";
+
 export {
   resolveHardCrisis,
   type HardCrisisResolution,

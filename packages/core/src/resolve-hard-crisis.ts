@@ -1,17 +1,12 @@
-import {
-  decide,
-  detectRules,
-  type Category,
-} from "./angelifeline-rules";
+import { decide, detectRules, type Category } from "./angelifeline-rules";
+import { maskPII } from "./angelifeline-mask";
+import { judgeMaskedText } from "./angelifeline-judge-server";
 import { inferCrisisFocus, type CrisisFocus } from "./crisis-focus";
-import {
-  assessCrisisWithGemini,
-  type GeminiCrisisTriage,
-} from "./gemini-crisis-triage";
 import { detectHardCrisis } from "./hard-crisis-detection";
 
 export type HardCrisisResolution = {
   hardCrisis: boolean;
+  softPrompt: boolean;
   crisisFocus: CrisisFocus;
   rulesMatch: boolean;
   geminiEscalate: boolean;
@@ -30,28 +25,17 @@ function crisisFocusFromCategories(
   return "general";
 }
 
-function geminiTierToModelProb(triage: GeminiCrisisTriage | null): number | null {
-  if (!triage) return null;
-  if (triage.tier === "red") return 0.9;
-  if (triage.tier === "yellow") return 0.05;
-  return 0;
-}
-
-function rulesPathMatch(
-  legacyMatch: boolean,
-  ruleLevel: ReturnType<typeof detectRules>["level"],
-  decisionReason: ReturnType<typeof decide>["reason"],
-): boolean {
-  if (legacyMatch || ruleLevel === "high") return true;
-  return (
-    decisionReason === "rule_review+model" ||
-    decisionReason === "rule_review_model_unavailable"
-  );
+function judgeLevelToModelProb(
+  level: "none" | "concern" | "urgent" | undefined,
+): number | null {
+  if (level === "urgent") return 0.9;
+  if (level === "concern") return 0.05;
+  if (level === "none") return 0;
+  return null;
 }
 
 /**
- * Overlay + host chat crisis gate: angelfeline-rules first, legacy keywords,
- * then Gemini semantic triage on recent user context (`chatSnippet`).
+ * Server crisis gate: local rules on raw text first, then masked LLM judge, then merge.
  */
 export async function resolveHardCrisis(options: {
   lastUserText: string;
@@ -61,30 +45,51 @@ export async function resolveHardCrisis(options: {
   const legacyMatch = detectHardCrisis(options.lastUserText);
   const chatForFocus = `${options.lastUserText}\n${options.chatSnippet}`;
 
-  const triage = await assessCrisisWithGemini({
-    chatSnippet: options.chatSnippet,
-  });
-  const geminiEscalate = Boolean(triage?.escalate);
-  const modelProb = geminiTierToModelProb(triage);
+  if (ruleResult.level === "high") {
+    return {
+      hardCrisis: true,
+      softPrompt: false,
+      crisisFocus: crisisFocusFromCategories(ruleResult.categories, chatForFocus),
+      rulesMatch: true,
+      geminiEscalate: false,
+    };
+  }
+
+  const masked = maskPII(options.lastUserText);
+  const judge = await judgeMaskedText(masked.text);
+  const modelProb =
+    judge.status === "ok"
+      ? judgeLevelToModelProb(judge.verdict.level)
+      : null;
   const decision = decide(ruleResult, modelProb);
 
-  const hardCrisis =
-    legacyMatch || decision.trigger || geminiEscalate;
-  const rulesMatch = rulesPathMatch(
-    legacyMatch,
-    ruleResult.level,
-    decision.reason,
-  );
+  const geminiEscalate =
+    judge.status === "ok" && judge.verdict.level === "urgent";
+  const hardCrisis = legacyMatch || decision.trigger || geminiEscalate;
+  const softPrompt =
+    !hardCrisis &&
+    (decision.softPrompt ||
+      (judge.status === "ok" && judge.verdict.level === "concern"));
 
-  const focusFromRules = crisisFocusFromCategories(
-    ruleResult.categories,
-    chatForFocus,
-  );
+  const categories = new Set(ruleResult.categories);
+  if (judge.status === "ok") {
+    const cat = judge.verdict.category;
+    if (cat === "self_harm" || cat === "violence" || cat === "medical") {
+      categories.add(cat);
+    }
+  }
 
   return {
     hardCrisis,
-    crisisFocus: triage?.crisisFocus ?? focusFromRules,
-    rulesMatch,
+    softPrompt,
+    crisisFocus:
+      crisisFocusFromCategories(Array.from(categories) as Category[], chatForFocus),
+    rulesMatch:
+      legacyMatch ||
+      ruleResult.level === "high" ||
+      decision.reason === "rule_high" ||
+      decision.reason === "rule_review+model" ||
+      decision.reason === "rule_review_model_unavailable",
     geminiEscalate,
   };
 }

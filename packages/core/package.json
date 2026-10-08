@@ -9,7 +9,13 @@
     "./hard-crisis-detection": "./src/hard-crisis-detection.ts",
     "./fetch-crisis-triage": "./src/fetch-crisis-triage.ts",
     "./resolve-hard-crisis": "./src/resolve-hard-crisis.ts",
-    "./angelifeline-rules": "./src/angelifeline-rules.ts"
+    "./angelifeline-rules": "./src/angelifeline-rules.ts",
+    "./angelifeline-mask": "./src/angelifeline-mask.ts",
+    "./angelifeline-pipeline": "./src/angelifeline-pipeline.ts",
+    "./angelifeline-judge-server": "./src/angelifeline-judge-server.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/angelifeline-rules.test.ts src/angelifeline-pipeline.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",
@@ -26,8 +32,5 @@
   "bugs": {
     "url": "https://github.com/hktrippyart/AngeLifeline/issues"
   },
-  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme",
-  "scripts": {
-    "test": "node --experimental-strip-types --test src/angelifeline-rules.test.ts"
-  }
+  "homepage": "https://github.com/hktrippyart/AngeLifeline#readme"
 }
