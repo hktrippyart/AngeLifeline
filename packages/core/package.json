@@ -12,7 +12,10 @@
     "./angelifeline-rules": "./src/angelifeline-rules.ts",
     "./angelifeline-mask": "./src/angelifeline-mask.ts",
     "./angelifeline-pipeline": "./src/angelifeline-pipeline.ts",
-    "./angelifeline-judge-server": "./src/angelifeline-judge-server.ts"
+    "./angelifeline-judge-server": "./src/angelifeline-judge-server.ts",
+    "./angelifeline-venue-privacy": "./src/angelifeline-venue-privacy.ts",
+    "./resolve-venue-for-crisis": "./src/resolve-venue-for-crisis.ts",
+    "./routing-policy": "./src/routing-policy.ts"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test src/angelifeline-rules.test.ts src/angelifeline-pipeline.test.ts"

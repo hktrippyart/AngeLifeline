@@ -1,3 +1,5 @@
+import { normalizeVenueLookupRequest } from "./angelifeline-venue-privacy";
+
 /** Lower index = higher priority when showing secondary lines. */
 export const LINE_KIND_PRIORITY = [
   "event_medical",
@@ -31,7 +33,10 @@ export function sortSecondaryLines(lines: SecondaryLine[]): SecondaryLine[] {
 export type VenueLookupRequest = {
   placeHint: string;
   regionHint?: string;
-  /** Recent user crisis lines only — server sends to Gemini for location grounding. */
+  /**
+   * Legacy hosts may send this; AngeLifeline normalizes it away before Gemini.
+   * Only a masked first-line fallback is used to derive placeHint if placeHint is empty.
+   */
   chatSnippet?: string;
 };
 
@@ -62,12 +67,12 @@ export function parseVenueLookupRequest(
     placeHint = (line ?? chatSnippet).slice(0, 120);
   }
   if (!placeHint) return null;
-  return {
+  return normalizeVenueLookupRequest({
     placeHint,
     regionHint:
       typeof o.regionHint === "string"
         ? o.regionHint.trim().slice(0, 80)
         : undefined,
     chatSnippet,
-  };
+  });
 }

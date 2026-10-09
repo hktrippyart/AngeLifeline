@@ -6,6 +6,8 @@ import {
   emergencyRegionFromRegionHint,
 } from "./emergency-routing";
 import type { EmergencyRegion } from "./emergency-routing";
+import { venueGroundingText } from "./angelifeline-venue-privacy";
+import type { VenueLookupRequest } from "./routing-policy";
 
 const venueContextSchema = z.object({
   placeQuery: z.string().min(1).max(120).nullish(),
@@ -130,25 +132,30 @@ async function generateVenueContext(
  * Server-only. Uses Gemini + Google Search grounding to find current venue/country.
  */
 export async function resolveVenueContextWithGemini(options: {
-  chatSnippet: string;
+  /** @deprecated Use `request` — only masked place/region hints are sent to Gemini. */
+  chatSnippet?: string;
   placeHint?: string;
+  /** Preferred: normalized venue lookup (PII masked, no raw chat). */
+  request?: VenueLookupRequest;
 }): Promise<GeminiVenueContext | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) return null;
 
   const model =
     process.env.GEMINI_MODEL_NAME?.trim() || "gemini-3.6-flash";
-  const snippet = options.chatSnippet.trim().slice(0, 500);
-  const hint = options.placeHint?.trim().slice(0, 120);
+  const req: VenueLookupRequest = options.request ?? {
+    placeHint: options.placeHint ?? "",
+    chatSnippet: options.chatSnippet,
+  };
+  const grounding = venueGroundingText(req);
+  if (!grounding.trim()) return null;
 
   const prompt = `You help emergency routing find the CURRENT real-world location of events and venues.
 
-User crisis message (may include typos):
+Location hints from the user (PII redacted; may include typos):
 """
-${snippet}
+${grounding}
 """
-
-${hint ? `Suggested place name from keywords: "${hint}"` : ""}
 
 Always use Google Search to confirm where the person is NOW and the correct local emergency number for that country/territory.
 
@@ -176,8 +183,8 @@ Rules:
       // fall through to loose parse
     }
 
-    return looseParseFromText(text, snippet);
+    return looseParseFromText(text, grounding);
   } catch {
-    return looseParseFromText("", snippet);
+    return looseParseFromText("", grounding);
   }
 }

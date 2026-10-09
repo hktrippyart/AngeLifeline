@@ -386,11 +386,19 @@ export function createHttpJudge(url: string, fetchImpl?: typeof fetch): Judge {
   };
 }
 
-/** 瀏覽器端 adapter：地點／活動查詢，只傳地點提示。 */
+/** 瀏覽器端 adapter：地點／活動查詢，只傳遮蔽後嘅 placeHint（同 optional region）。 */
 export function createHttpLookup(url: string, fetchImpl?: typeof fetch): Lookup {
   return async (input, signal) => {
     const f = fetchImpl ?? fetch;
-    const res = await f(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ hint: input }), signal });
+    const res = await f(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        placeHint: input.text,
+        regionHint: input.region,
+      }),
+      signal,
+    });
     if (!res.ok) throw new Error("lookup_http_" + res.status);
     return res.json();
   };

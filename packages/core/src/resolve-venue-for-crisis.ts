@@ -7,6 +7,7 @@ import {
   lookupPlacesVenue,
   type PlacesVenueResult,
 } from "./google-places-lookup";
+import { normalizeVenueLookupRequest } from "./angelifeline-venue-privacy";
 import type { VenueLookupRequest } from "./routing-policy";
 import { emergencyRegionFromCountryCode } from "./emergency-routing";
 
@@ -68,19 +69,17 @@ function mergeResolved(
 
 /** Gemini + Google Search grounding, then Places (New) when a Maps key is set. */
 export async function resolveVenueForCrisis(
-  req: VenueLookupRequest,
+  raw: VenueLookupRequest,
   placesApiKey?: string,
 ): Promise<CrisisVenueResult> {
+  const req = normalizeVenueLookupRequest(raw);
   let placeHint = req.placeHint;
   let regionHint = req.regionHint;
   let geminiCtx: Awaited<ReturnType<typeof resolveVenueContextWithGemini>> =
     null;
 
-  if (req.chatSnippet?.trim()) {
-    geminiCtx = await resolveVenueContextWithGemini({
-      chatSnippet: req.chatSnippet,
-      placeHint: req.placeHint,
-    });
+  if (req.placeHint.trim()) {
+    geminiCtx = await resolveVenueContextWithGemini({ request: req });
     if (geminiCtx) {
       if (geminiCtx.placeQuery) placeHint = geminiCtx.placeQuery;
       if (!regionHint && geminiCtx.regionHint) regionHint = geminiCtx.regionHint;
@@ -109,9 +108,9 @@ export async function resolveVenueForCrisis(
   );
 
   if (!geminiCtx) {
-    const fromChat = req.chatSnippet?.trim()
-      ? inferCountryCodeFromChat(req.chatSnippet)
-      : undefined;
+    const fromChat = inferCountryCodeFromChat(
+      [req.placeHint, req.regionHint].filter(Boolean).join("\n"),
+    );
     if (
       fromChat &&
       places.resolved.countryCode &&
@@ -140,7 +139,11 @@ export async function resolveVenueForCrisis(
   }
 
   return {
-    ...mergeResolved(places, geminiCtx, req.chatSnippet),
+    ...mergeResolved(
+      places,
+      geminiCtx,
+      [req.placeHint, req.regionHint].filter(Boolean).join("\n"),
+    ),
     geminiUsed: true,
   };
 }

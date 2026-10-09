@@ -103,6 +103,11 @@ export {
 
 export { maskPII, MASK_LIMITS, type MaskCounts } from "./angelifeline-mask";
 
+export {
+  normalizeVenueLookupRequest,
+  venueGroundingText,
+} from "./angelifeline-venue-privacy";
+
 export { JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT } from "./angelifeline-judge-prompt";
 
 export { handleJudgePost, judgeMaskedText } from "./angelifeline-judge-server";
