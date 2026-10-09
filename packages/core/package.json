@@ -12,6 +12,8 @@
     "./angelifeline-rules": "./src/angelifeline-rules.ts",
     "./angelifeline-mask": "./src/angelifeline-mask.ts",
     "./angelifeline-pipeline": "./src/angelifeline-pipeline.ts",
+    "./country-emergency": "./src/country-emergency.ts",
+    "./angelifeline-ems-iso": "./src/angelifeline-ems-iso.ts",
     "./angelifeline-judge-server": "./src/angelifeline-judge-server.ts",
     "./angelifeline-venue-privacy": "./src/angelifeline-venue-privacy.ts",
     "./resolve-venue-for-crisis": "./src/resolve-venue-for-crisis.ts",

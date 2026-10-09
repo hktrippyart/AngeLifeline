@@ -117,10 +117,39 @@ test("冇地點提示：按語言／時區／瀏覽器語言揀，永遠有號�
   assert.equal(tw.action.type === "overlay" && tw.action.ems.numbers[0].tel, "119");
 
   const gb = await processMessage(createSession(), "I want to kill myself", base({ env: { locale: "en-GB" } }));
-  assert.equal(gb.action.type === "overlay" && gb.action.ems.region, "GB");
+  assert.equal(gb.action.type === "overlay" && gb.action.ems.region, "US_GB");
+  const gbTels =
+    gb.action.type === "overlay" ? gb.action.ems.numbers.map((n) => n.tel) : [];
+  assert.ok(gbTels.includes("911"));
+  assert.ok(gbTels.includes("999"));
+
+  const usLocale = await processMessage(createSession(), "I want to kill myself", base({ env: { locale: "en-US" } }));
+  assert.equal(usLocale.action.type === "overlay" && usLocale.action.ems.region, "US_GB");
+
+  const enLang = await processMessage(createSession(), "I want to kill myself", base());
+  assert.equal(enLang.action.type === "overlay" && enLang.action.ems.region, "US_GB");
+  const enTels =
+    enLang.action.type === "overlay"
+      ? enLang.action.ems.numbers.map((n) => n.tel)
+      : [];
+  assert.ok(enTels.includes("911"));
+  assert.ok(enTels.includes("999"));
 
   const bad = await processMessage(createSession(), "I want to kill myself", base({ config: { siteRegion: "XX" } }));
-  assert.ok(bad.action.type === "overlay" && bad.action.ems.numbers.length > 0);
+  assert.equal(bad.action.type === "overlay" && bad.action.ems.region, "US_GB");
+
+  const cn = await processMessage(createSession(), "我没有办法了想杀死自己", base());
+  assert.equal(cn.action.type === "overlay" && cn.action.ems.region, "CN");
+  assert.equal(cn.action.type === "overlay" && cn.action.ems.numbers[0].tel, "120");
+
+  const twLang = await processMessage(createSession(), "我想自殺", base());
+  assert.equal(twLang.action.type === "overlay" && twLang.action.ems.region, "HK_TW");
+  const tels =
+    twLang.action.type === "overlay"
+      ? twLang.action.ems.numbers.map((n) => n.tel)
+      : [];
+  assert.ok(tels.includes("999"));
+  assert.ok(tels.includes("119"));
 });
 
 test("訊息已經有地點提示：直接用，confidence = known", async () => {
@@ -248,8 +277,14 @@ test("parseVerdict 嚴格驗證；buildCard 永遠有號碼", () => {
   assert.equal(parseVerdict({ level: "URGENT" })?.level, "urgent");
   assert.equal(parseVerdict({ level: "high" }), null);
   assert.equal(parseVerdict(null), null);
+  assert.ok(Object.keys(EMS).length >= 240, "ISO EMS table should cover all countries/territories");
   for (const k of Object.keys(EMS)) assert.ok(buildCard(k, "guess").numbers.length > 0);
-  assert.ok(buildCard("nope", "guess").numbers.length > 0);
+  const unknown = buildCard("nope", "guess");
+  assert.ok(unknown.numbers.length > 0);
+  assert.equal(unknown.numbers[0]?.tel, "112");
+  assert.equal(unknown.regionLabel.en, "Local emergency services");
+  assert.equal(buildCard("nope", "guess", "JP").region, "JP");
+  assert.equal(buildCard("TH", "known").numbers[0]?.tel, "191");
 });
 
 test("createHttpJudge：成功、非 2xx、被擋", async () => {

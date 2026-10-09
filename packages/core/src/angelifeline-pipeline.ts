@@ -8,7 +8,7 @@
 //   6. 緊急電話按地區揀（地點提示 > 時區 > 瀏覽器語言 > 訊息語言 > 網站預設）
 //   7. Overlay 彈咗但未知地點：之後幾句訊息留意用戶有冇提供地點／活動，有就更新 overlay
 //
-// 本檔案冇任何 import：所有依賴（規則、遮蔽、LLM、地點查詢）由 deps 傳入，方便測試同換供應商。
+// 規則、遮蔽、LLM、地點查詢等執行期依賴由 deps 傳入；靜態 EMS 表由 angelfeline-ems-iso 載入。
 //
 // 安全設計原則
 // - 規則 high 唔會被 LLM 取消（high 時根本唔會叫 LLM）。
@@ -55,15 +55,9 @@ export interface RuleResultLike {
   hits: { id: string }[];
 }
 
-export interface EmsNumber {
-  tel: string;
-  zh: string;
-  en: string;
-}
-export interface RegionInfo {
-  label: { zh: string; en: string };
-  numbers: EmsNumber[];
-}
+export type { EmsNumber, RegionInfo } from "./angelifeline-pipeline-types";
+import type { EmsNumber, RegionInfo } from "./angelifeline-pipeline-types";
+import { EMS_FROM_ISO } from "./angelifeline-ems-iso";
 export interface ExtraNumber {
   label: string;
   tel: string;
@@ -112,7 +106,8 @@ export interface Env {
 }
 
 export interface PipelineConfig {
-  siteRegion: string; // 網站預設地區
+  /** 最後 fallback：冇 place hint、時區、locale、訊息語言都估唔到時先用（例如英文訊息） */
+  siteRegion: string;
   judgeTimeoutMs: number;
   lookupTimeoutMs: number;
   awaitWindowMessages: number; // overlay 之後追蹤地點幾多句
@@ -155,56 +150,26 @@ export function createSession(): Session {
 /* ------------------------------------------------------------------ */
 /* 靜態緊急電話表                                                        */
 /* ------------------------------------------------------------------ */
-// ⚠️ 上線前必須由人手逐個核對（官方網站），並記錄核對日期。呢度只係初稿。
+// ⚠️ 上線前應抽查高流量地區（見 angelifeline-ems-iso.ts 嘅 EMS_OVERRIDES），並記錄核對日期。
+// ISO 覆蓋：emergency-numbers-wiki.json（249 個 ISO 3166-1 alpha-2，來源：公開 EMS 整理；未核實地區請用戶自行核對）。
 // 緊急電話只用呢張表，唔用 AI 搜尋結果。
 
 export const EMS_LAST_VERIFIED = ""; // 例如 "2026-10-08"，核對後填寫
 
-const POLICE_FIRE_AMB: EmsNumber = { tel: "999", zh: "警察、消防、救護車", en: "Police, fire, ambulance" };
-
-export const EMS: Record<string, RegionInfo> = {
-  HK: { label: { zh: "香港", en: "Hong Kong" }, numbers: [POLICE_FIRE_AMB] },
-  MO: { label: { zh: "澳門", en: "Macau" }, numbers: [POLICE_FIRE_AMB] },
-  TW: {
-    label: { zh: "台灣", en: "Taiwan" },
-    numbers: [
-      { tel: "119", zh: "消防、救護車", en: "Fire, ambulance" },
-      { tel: "110", zh: "警察", en: "Police" },
-    ],
-  },
-  CN: {
-    label: { zh: "中國內地", en: "Mainland China" },
-    numbers: [
-      { tel: "120", zh: "救護車", en: "Ambulance" },
-      { tel: "110", zh: "警察", en: "Police" },
-      { tel: "119", zh: "消防", en: "Fire" },
-    ],
-  },
-  SG: {
-    label: { zh: "新加坡", en: "Singapore" },
-    numbers: [
-      { tel: "995", zh: "救護車、消防", en: "Ambulance, fire" },
-      { tel: "999", zh: "警察", en: "Police" },
-    ],
-  },
-  JP: {
-    label: { zh: "日本", en: "Japan" },
-    numbers: [
-      { tel: "119", zh: "救護車、消防", en: "Ambulance, fire" },
-      { tel: "110", zh: "警察", en: "Police" },
-    ],
-  },
-  GB: { label: { zh: "英國", en: "United Kingdom" }, numbers: [{ tel: "999", zh: "警察、消防、救護車", en: "Police, fire, ambulance" }] },
-  US: { label: { zh: "美國", en: "United States" }, numbers: [{ tel: "911", zh: "警察、消防、救護車", en: "Police, fire, ambulance" }] },
-  CA: { label: { zh: "加拿大", en: "Canada" }, numbers: [{ tel: "911", zh: "警察、消防、救護車", en: "Police, fire, ambulance" }] },
-  AU: { label: { zh: "澳洲", en: "Australia" }, numbers: [{ tel: "000", zh: "警察、消防、救護車", en: "Police, fire, ambulance" }] },
-};
+/** ISO 3166-1 alpha-2 → 靜態緊急電話（含人手 override） */
+export const EMS: Record<string, RegionInfo> = EMS_FROM_ISO;
 
 export const UNIVERSAL: EmsNumber = {
   tel: "112",
   zh: "喺好多地方，手機撥 112 可以轉駁當地緊急服務",
   en: "On many mobile networks, 112 connects to local emergency services",
 };
+
+/** 繁中書面、未辨地點時同時顯示香港同台灣 EMS（唔單押 TW） */
+export const REGION_GUESS_ZH_HANT = "HK_TW";
+
+/** 英文、未辨地點時同時顯示美國 911 同英國 999（常見旅客／雙系統） */
+export const REGION_GUESS_EN = "US_GB";
 
 const TZ_REGION: Record<string, string> = {
   "Asia/Hong_Kong": "HK",
@@ -227,7 +192,11 @@ export function regionFromTimezone(tz?: string): string | null {
 
 export function regionFromLocale(locale?: string): string | null {
   if (!locale) return null;
-  const m = /[-_]([A-Za-z]{2})$/.exec(locale.trim());
+  const trimmed = locale.trim();
+  // 任何英文 UI / 瀏覽器 locale → 911 + 999（唔分 en-US / en-GB）
+  if (/^en(?:[-_]|$)/i.test(trimmed)) return REGION_GUESS_EN;
+  if (/^zh-Hant/i.test(trimmed)) return REGION_GUESS_ZH_HANT;
+  const m = /[-_]([A-Za-z]{2})$/.exec(trimmed);
   if (!m) return null;
   const r = m[1].toUpperCase();
   return EMS[r] ? r : null;
@@ -261,6 +230,16 @@ export function sessionLang(s: Session): Lang {
     }
   }
   return best;
+}
+
+/** 訊息語言 → 地區 guess（粵語→HK；簡中→CN；繁中→HK_TW；英文→US_GB） */
+export function regionFromSessionLang(session: Session): string | null {
+  const lang = sessionLang(session);
+  if (lang === "yue") return "HK";
+  if (lang === "zh-Hans") return "CN";
+  if (lang === "zh-Hant") return REGION_GUESS_ZH_HANT;
+  if (lang === "en") return REGION_GUESS_EN;
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -419,13 +398,96 @@ export function inferRegion(
   if (tz && EMS[tz]) return { region: tz, confidence: "guess" };
   const loc = regionFromLocale(env?.locale);
   if (loc) return { region: loc, confidence: "guess" };
-  if (sessionLang(session) === "yue") return { region: "HK", confidence: "guess" };
-  return { region: EMS[cfg.siteRegion] ? cfg.siteRegion : "HK", confidence: "guess" };
+  const fromLang = regionFromSessionLang(session);
+  if (fromLang) return { region: fromLang, confidence: "guess" };
+  if (EMS[cfg.siteRegion]) return { region: cfg.siteRegion, confidence: "guess" };
+  return { region: cfg.siteRegion, confidence: "guess" };
 }
 
-export function buildCard(region: string, confidence: "known" | "guess"): EmsCard {
-  const info = EMS[region] ?? EMS.HK; // 永遠有號碼
-  const r = EMS[region] ? region : "HK";
+function buildMultiRegionGuessCard(
+  regionKey: string,
+  regionLabel: { zh: string; en: string },
+  parts: { iso: string; prefix: { zh: string; en: string } }[],
+  confidence: "known" | "guess",
+): EmsCard {
+  const numbers: EmsNumber[] = [];
+  for (const part of parts) {
+    const info = EMS[part.iso];
+    if (!info) continue;
+    for (const n of info.numbers) {
+      numbers.push({
+        tel: n.tel,
+        zh: `${part.prefix.zh} · ${n.zh}`,
+        en: `${part.prefix.en} · ${n.en}`,
+      });
+    }
+  }
+  if (!numbers.length) return universalFallbackCard(regionKey, confidence);
+  return {
+    region: regionKey,
+    regionLabel,
+    numbers,
+    universal: { ...UNIVERSAL },
+    confidence,
+    askLocation: true,
+  };
+}
+
+function buildHkTwGuessCard(confidence: "known" | "guess"): EmsCard {
+  return buildMultiRegionGuessCard(
+    REGION_GUESS_ZH_HANT,
+    { zh: "香港／台灣", en: "Hong Kong / Taiwan" },
+    [
+      { iso: "HK", prefix: { zh: "香港", en: "Hong Kong" } },
+      { iso: "TW", prefix: { zh: "台灣", en: "Taiwan" } },
+    ],
+    confidence,
+  );
+}
+
+function buildUsGbGuessCard(confidence: "known" | "guess"): EmsCard {
+  return buildMultiRegionGuessCard(
+    REGION_GUESS_EN,
+    { zh: "美國／英國", en: "United States / United Kingdom" },
+    [
+      { iso: "US", prefix: { zh: "美國", en: "United States" } },
+      { iso: "GB", prefix: { zh: "英國", en: "United Kingdom" } },
+    ],
+    confidence,
+  );
+}
+
+function universalFallbackCard(region: string, confidence: "known" | "guess"): EmsCard {
+  return {
+    region,
+    regionLabel: { zh: "當地緊急服務", en: "Local emergency services" },
+    numbers: [
+      {
+        tel: "112",
+        zh: "好多地方手機可撥 112（請核實當地號碼）",
+        en: "112 works on many mobile networks (verify local numbers)",
+      },
+    ],
+    universal: { ...UNIVERSAL },
+    confidence: "guess",
+    askLocation: true,
+  };
+}
+
+export function buildCard(
+  region: string,
+  confidence: "known" | "guess",
+  fallbackRegion?: string,
+): EmsCard {
+  if (region === REGION_GUESS_ZH_HANT) return buildHkTwGuessCard(confidence);
+  if (region === REGION_GUESS_EN) return buildUsGbGuessCard(confidence);
+  let r = region;
+  let info = EMS[r];
+  if (!info && fallbackRegion && EMS[fallbackRegion]) {
+    r = fallbackRegion;
+    info = EMS[fallbackRegion];
+  }
+  if (!info) return universalFallbackCard(region, confidence);
   return {
     region: r,
     regionLabel: info.label,
@@ -489,7 +551,7 @@ async function runLookup(
     if (!parsed) return null;
     const region = parsed.region ?? base.region;
     const confidence = parsed.region ? "known" : base.confidence;
-    const card = buildCard(region, confidence);
+    const card = buildCard(region, confidence, base.region);
     if (parsed.extras.length) card.extras = parsed.extras;
     if (parsed.venue) card.venue = parsed.venue;
     if (confidence === "known") {

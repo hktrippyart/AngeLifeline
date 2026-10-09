@@ -1,76 +1,5 @@
-import type { EmergencyDisplay } from "@/lib/angelifeline/emergency-routing";
-
-/** Primary unified emergency number by ISO 3166-1 alpha-2 (from public EMS references). */
-const EMS_BY_ISO: Record<
-  string,
-  Pick<EmergencyDisplay, "number" | "subnoteEn" | "subnoteZh">
-> = {
-  AD: { number: "112" },
-  AE: { number: "999", subnoteEn: "Police: 999 · Ambulance: 998" },
-  AR: { number: "911" },
-  AT: { number: "112" },
-  AU: { number: "000" },
-  BE: { number: "112" },
-  BG: { number: "112" },
-  BR: { number: "192", subnoteEn: "Medical: 192 · Fire: 193 · Police: 190" },
-  CA: { number: "911" },
-  CH: { number: "112", subnoteEn: "Police: 117 · Fire: 118 · Ambulance: 144" },
-  CL: { number: "131", subnoteEn: "Ambulance · Police: 133 · Fire: 132" },
-  CN: { number: "120", subnoteEn: "Ambulance: 120 · Police: 110 · Fire: 119" },
-  CO: { number: "123" },
-  CR: { number: "911" },
-  CY: { number: "112" },
-  CZ: { number: "112" },
-  DE: { number: "112" },
-  DK: { number: "112" },
-  EE: { number: "112" },
-  EG: { number: "122", subnoteEn: "Ambulance · Police: 122" },
-  ES: { number: "112" },
-  FI: { number: "112" },
-  FR: { number: "112" },
-  GB: { number: "999" },
-  GR: { number: "112" },
-  HK: { number: "999" },
-  HR: { number: "112" },
-  HU: { number: "112" },
-  ID: { number: "112", subnoteEn: "Also 110 police, 118 ambulance in some areas" },
-  IE: { number: "112", subnoteEn: "Also 999" },
-  IL: { number: "100", subnoteEn: "Police: 100 · Ambulance: 101 · Fire: 102" },
-  IN: { number: "112" },
-  IS: { number: "112" },
-  IT: { number: "112" },
-  JP: { number: "119", subnoteEn: "Police: 110 · Medical/fire: 119" },
-  KE: { number: "999" },
-  KR: { number: "119", subnoteEn: "Police: 112 · Fire/medical: 119" },
-  LT: { number: "112" },
-  LU: { number: "112" },
-  LV: { number: "112" },
-  MA: { number: "19", subnoteEn: "Police · Ambulance: 15 · Fire: 15" },
-  MT: { number: "112" },
-  MX: { number: "911" },
-  MY: { number: "999" },
-  NL: { number: "112" },
-  NO: { number: "112", subnoteEn: "Police: 112 · Medical: 113 · Fire: 110" },
-  NZ: { number: "111" },
-  PE: { number: "105", subnoteEn: "Police · Ambulance: 106 · Fire: 116" },
-  PH: { number: "911" },
-  PL: { number: "112" },
-  PT: { number: "112" },
-  RO: { number: "112" },
-  RS: { number: "112", subnoteEn: "Police: 192 · Fire: 193 · Ambulance: 194" },
-  RU: { number: "112" },
-  SE: { number: "112" },
-  SG: { number: "999", subnoteEn: "Police · Ambulance/fire: 995" },
-  SI: { number: "112" },
-  SK: { number: "112" },
-  TH: { number: "191", subnoteEn: "Ambulance: 1669 · Tourist police: 1155" },
-  TR: { number: "112" },
-  TW: { number: "119", subnoteEn: "Police: 110 · Fire/medical: 119" },
-  UA: { number: "112" },
-  US: { number: "911" },
-  VN: { number: "113", subnoteEn: "Police: 113 · Fire: 114 · Ambulance: 115" },
-  ZA: { number: "112", subnoteEn: "Also 10111 police · 10177 ambulance" },
-};
+import { EMS_FROM_ISO } from "./angelifeline-ems-iso";
+import type { EmergencyDisplay } from "./emergency-routing";
 
 const EU_ISO = new Set([
   "AT",
@@ -104,7 +33,24 @@ const EU_ISO = new Set([
 
 function countryLabel(iso: string, regionHint?: string): string {
   if (regionHint?.trim()) return regionHint.trim();
-  return iso;
+  const info = EMS_FROM_ISO[iso];
+  return info?.label.en ?? iso;
+}
+
+function primaryNumber(iso: string): string | undefined {
+  const info = EMS_FROM_ISO[iso];
+  return info?.numbers[0]?.tel;
+}
+
+function subnoteFromNumbers(iso: string): { subnoteEn?: string; subnoteZh?: string } {
+  const info = EMS_FROM_ISO[iso];
+  if (!info || info.numbers.length <= 1) return {};
+  const partsEn = info.numbers.map((n) => `${n.en}: ${n.tel}`);
+  const partsZh = info.numbers.map((n) => `${n.zh}：${n.tel}`);
+  return {
+    subnoteEn: partsEn.join(" · "),
+    subnoteZh: partsZh.join(" · "),
+  };
 }
 
 export function emergencyDisplayFromCountryCode(
@@ -112,8 +58,8 @@ export function emergencyDisplayFromCountryCode(
   regionHint?: string,
 ): EmergencyDisplay | undefined {
   const c = iso.trim().toUpperCase();
-  const entry = EMS_BY_ISO[c];
-  if (!entry) {
+  const num = primaryNumber(c);
+  if (!num) {
     if (EU_ISO.has(c)) {
       return {
         number: "112",
@@ -126,12 +72,12 @@ export function emergencyDisplayFromCountryCode(
     return undefined;
   }
   const place = countryLabel(c, regionHint);
+  const sub = subnoteFromNumbers(c);
   return {
-    number: entry.number,
-    labelEn: `Emergency (${entry.number}) — ${place}`,
-    labelZh: `緊急服務 (${entry.number}) — ${place}`,
-    subnoteEn: entry.subnoteEn,
-    subnoteZh: entry.subnoteZh,
+    number: num,
+    labelEn: `Emergency (${num}) — ${place}`,
+    labelZh: `緊急服務 (${num}) — ${place}`,
+    ...sub,
   };
 }
 

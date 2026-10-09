@@ -91,7 +91,7 @@ Legacy **`fetchCrisisTriage`** → `POST /api/angelifeline/crisis-triage` still 
 
 ### Emergency numbers vs AI search
 
-- **Primary EMS** comes from a **static, hand-verifiable table** in `angelifeline-pipeline.ts` (`EMS`, plus universal **112** note). Set `EMS_LAST_VERIFIED` after you audit numbers.
+- **Primary EMS** comes from a **static ISO 3166-1 table** (`EMS` in `angelifeline-pipeline.ts`, built from `data/emergency-numbers-wiki.json` plus hand overrides in `angelifeline-ems-iso.ts`), with a universal **112** note. Set `EMS_LAST_VERIFIED` after you audit high-traffic regions.
 - **Region guess** when the user has not named a place: timezone → browser locale → `detectLang()` on the message → `siteRegion`.
 - **Known place / event** in text → higher confidence region; optional **venue lookup** sends **only the place hint** (not the full chat) to your existing venue route. AI-returned numbers are **extras** with “verify” framing—they **do not** replace static EMS.
 - After an overlay opens **without** a known place, the pipeline **watches the next few user messages** for location hints and can emit `overlay_update`.
