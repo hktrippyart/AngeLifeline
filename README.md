@@ -186,6 +186,23 @@ Without `GEMINI_API_KEY`, the judge fails closed into **rules-only** behavior (l
 
 On `action.type === "overlay"`, open `AngeLifelineOverlay` with `triggered` and `highSeverity`. Map pipeline `categories` to your `crisisFocus` (`self_harm` → suicide, etc.). On `soft_prompt`, show a gentle in-chat nudge (no full overlay).
 
+#### One overlay per user message (client pipeline + server chat)
+
+Many hosts run **both**:
+
+1. **Client** — `processMessage()` (rules / judge) opens the overlay as soon as the user sends.
+2. **Server** — the chat handler calls `resolveHardCrisis()` and may emit a stream event such as `{ crisis: true }` before the assistant reply tokens.
+
+That is **two independent gates on the same turn**, not a second user message. If you do not dedupe, users can see the overlay open twice (often once before helplines load, again when the stream starts).
+
+**Recommended:** keep a **per-turn flag** in your chat UI (e.g. a ref reset when the user sends, set when the overlay opens):
+
+- When **`processMessage`** yields `action.type === "overlay"`, open the overlay and set the flag **`true`**.
+- When handling **SSE / stream `crisis`** (or a second call to `fetchCrisisTriage`), **skip opening** if the flag is already `true` for this turn.
+- Optional: if you only use the client pipeline for overlay timing, you can omit `{ crisis: true }` from the chat stream and rely on the pipeline alone — but then non-pipeline hosts must still use server triage.
+
+Helplines and venue data may **update the same overlay** after the first open (numbers appear when `fetchCrisisHelplines` returns). That is a content refresh, not a second trigger.
+
 ```tsx
 "use client";
 
