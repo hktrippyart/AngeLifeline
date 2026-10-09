@@ -15,7 +15,8 @@
     "./angelifeline-judge-server": "./src/angelifeline-judge-server.ts",
     "./angelifeline-venue-privacy": "./src/angelifeline-venue-privacy.ts",
     "./resolve-venue-for-crisis": "./src/resolve-venue-for-crisis.ts",
-    "./routing-policy": "./src/routing-policy.ts"
+    "./routing-policy": "./src/routing-policy.ts",
+    "./gemini-generation-config": "./src/gemini-generation-config.ts"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test src/angelifeline-rules.test.ts src/angelifeline-pipeline.test.ts"

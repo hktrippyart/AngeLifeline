@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import type { CrisisFocus } from "./crisis-focus";
+import { sanitizeGeminiGenerationConfig } from "./gemini-generation-config";
 
 const triageSchema = z.object({
   tier: z.enum(["red", "yellow", "none"]),
@@ -74,10 +75,10 @@ Rules:
     const response = await ai.models.generateContent({
       model,
       contents: prompt,
-      config: {
+      config: sanitizeGeminiGenerationConfig(model, {
         temperature: 0.1,
         maxOutputTokens: 128,
-      },
+      }),
     });
 
     const text = response.text?.trim();

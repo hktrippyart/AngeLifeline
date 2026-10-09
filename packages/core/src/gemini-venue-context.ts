@@ -7,6 +7,7 @@ import {
 } from "./emergency-routing";
 import type { EmergencyRegion } from "./emergency-routing";
 import { venueGroundingText } from "./angelifeline-venue-privacy";
+import { sanitizeGeminiGenerationConfig } from "./gemini-generation-config";
 import type { VenueLookupRequest } from "./routing-policy";
 
 const venueContextSchema = z.object({
@@ -119,11 +120,11 @@ async function generateVenueContext(
   const response = await ai.models.generateContent({
     model,
     contents: prompt,
-    config: {
+    config: sanitizeGeminiGenerationConfig(model, {
       temperature: 0.2,
       maxOutputTokens: 256,
       ...(useSearch ? { tools: [{ googleSearch: {} }] } : {}),
-    },
+    }),
   });
   return response.text?.trim();
 }

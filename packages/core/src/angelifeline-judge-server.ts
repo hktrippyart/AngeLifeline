@@ -8,15 +8,14 @@ import {
   readLimitedJson,
   sanitize,
 } from "./angelifeline-backend-privacy";
+import { sanitizeGeminiGenerationConfig } from "./gemini-generation-config";
 import { parseVerdict, type Verdict } from "./angelifeline-pipeline";
 
 export type JudgeServerResult =
   | { status: "ok"; verdict: Verdict; ms: number }
   | { status: "timeout" | "error" | "invalid" | "blocked"; ms: number };
 
-/**
- * Server-only Gemini judge on already-masked text (temperature 0, JSON verdict).
- */
+/** Server-only Gemini judge on masked text (JSON verdict; sampling omitted on Gemini 3.x). */
 export async function judgeMaskedText(
   maskedText: string,
   options: { timeoutMs?: number } = {},
@@ -47,12 +46,12 @@ export async function judgeMaskedText(
           parts: [{ text: `<message>\n${text}\n</message>` }],
         },
       ],
-      config: {
+      config: sanitizeGeminiGenerationConfig(model, {
         systemInstruction: JUDGE_SYSTEM_PROMPT,
         temperature: 0,
         maxOutputTokens: 512,
         responseMimeType: "application/json",
-      },
+      }),
     });
     const timeout = new Promise<typeof TIMEOUT>((resolve) => {
       timer = setTimeout(() => resolve(TIMEOUT), timeoutMs);
