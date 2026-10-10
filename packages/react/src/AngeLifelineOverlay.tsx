@@ -33,6 +33,10 @@ function crisisHeading(zh: boolean): string {
   return zh ? "自殺／情緒危機熱線" : "Suicide & crisis support";
 }
 
+function telHref(tel: string): string {
+  return `tel:${tel.replace(/\s/g, "")}`;
+}
+
 export function AngeLifelineOverlay({
   uiLocale,
   analysis,
@@ -128,9 +132,7 @@ export function AngeLifelineOverlay({
     >
       <div className="mx-auto flex w-full max-w-xl justify-center py-[max(1.5rem,8vh)]">
         <div className="w-full rounded-3xl border border-line bg-void p-5 shadow-xl ring-1 ring-line sm:p-7">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-ember">
-            AngeLifeline
-          </p>
+          <p className="text-sm font-medium text-mist">AngeLifeline</p>
           <h2
             id="lifeline-title"
             className="mt-2 font-display text-2xl font-semibold tracking-tight text-fog sm:text-3xl"
@@ -171,142 +173,169 @@ export function AngeLifelineOverlay({
             </p>
           ) : null}
 
-          {telephony === "telephony" &&
-          (primaryEmsDisplays.length > 0 || crisisLines.length > 0) ? (
-            <div className="mt-6 flex flex-col gap-3">
-              {primaryEmsDisplays.map((ems) => (
-                <a
-                  key={`ems-tel-${ems.number}`}
-                  href={`tel:${ems.number.replace(/\s/g, "")}`}
-                  className="flex min-h-[3.25rem] items-center justify-center rounded-2xl bg-danger px-4 py-3 text-center text-base font-semibold text-void transition hover:opacity-90 sm:text-lg"
-                >
-                  {zh ? ems.labelZh : ems.labelEn}
-                </a>
-              ))}
-              {crisisLines.map((line) =>
-                line.tel ? (
-                  <a
-                    key={`crisis-${line.name}-${line.tel}`}
-                    href={`tel:${line.tel.replace(/\s/g, "")}`}
-                    className="flex min-h-[3rem] items-center justify-center rounded-2xl bg-ember px-4 py-3 text-center text-sm font-semibold text-void transition hover:bg-ember-bright sm:text-base"
-                  >
-                    {zh ? line.labelZh : line.labelEn}
-                  </a>
-                ) : null,
-              )}
-              {venueLines.map((line) => (
-                <a
-                  key={`${line.source}-${line.tel}-${line.labelEn}`}
-                  href={`tel:${line.tel.replace(/\s/g, "")}`}
-                  className="flex min-h-[3rem] items-center justify-center rounded-2xl bg-deep px-4 py-3 text-center text-sm font-semibold text-fog ring-1 ring-line transition hover:bg-moss sm:text-base"
-                >
-                  {zh ? line.labelZh : line.labelEn}
-                </a>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-6 space-y-4">
-              {primaryEmsDisplays.map((ems) => (
-                <div
-                  key={`ems-card-${ems.number}`}
-                  className="rounded-2xl border-2 border-danger/35 bg-danger/5 px-4 py-4 text-center sm:px-5 sm:py-5"
-                >
-                  <p className="text-xs font-medium uppercase tracking-wide text-mist">
-                    {zh ? "緊急服務" : "Emergency services"}
-                  </p>
-                  <p className="mt-2 text-sm font-medium leading-snug text-fog">
-                    {zh ? ems.labelZh : ems.labelEn}
-                  </p>
-                  <p className="mt-2 font-mono text-4xl font-semibold tracking-wide text-fog sm:text-5xl">
-                    {ems.number}
-                  </p>
-                  {ems.subnoteEn ? (
-                    <p className="mt-2 text-xs leading-relaxed text-mist">
-                      {zh ? ems.subnoteZh : ems.subnoteEn}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
+          {(() => {
+            const tapToCall = telephony === "telephony";
+            const telLinkClass =
+              "touch-manipulation flex min-h-[3rem] w-full items-center justify-center rounded-2xl px-4 py-3 text-center transition active:opacity-90";
 
-              {showUnknownEmsCopy ? (
-                <div className="rounded-2xl border-2 border-danger/35 bg-danger/5 px-4 py-4 text-center sm:px-5 sm:py-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-mist">
-                    {zh ? "緊急服務" : "Emergency services"}
-                  </p>
-                  <p className="mt-3 text-base font-semibold leading-snug text-fog sm:text-lg">
-                    {zh ? emergencyDisplay.labelZh : emergencyDisplay.labelEn}
-                  </p>
-                  {emergencyDisplay.subnoteEn ? (
-                    <p className="mt-2 text-xs leading-relaxed text-mist">
-                      {zh
-                        ? emergencyDisplay.subnoteZh
-                        : emergencyDisplay.subnoteEn}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {primaryEmsDisplays.length > 0 ? (
-                <p className="text-center text-xs leading-relaxed text-mist">
-                  {zh
-                    ? "此裝置可能無法直接撥打電話，請手動撥號或使用另一部電話。"
-                    : "This device may not place calls directly — dial manually or use another phone."}
-                </p>
-              ) : null}
-
-              {showCrisisLines && crisisLines.length > 0 ? (
-                <div className="rounded-2xl border border-ember/35 bg-ember/5 px-4 py-3 sm:px-5 sm:py-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-mist">
-                    {crisisHeading(zh)}
-                  </p>
-                  <ul className="mt-3 divide-y divide-line/80">
-                    {crisisLines.map((line) => (
-                      <li
-                        key={`crisis-${line.name}-${line.tel ?? line.sms}`}
-                        className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                      >
-                        <p className="text-sm font-medium leading-snug text-fog">
-                          {zh ? line.labelZh : line.labelEn}
+            return (
+              <div className="mt-6 space-y-4">
+                {primaryEmsDisplays.map((ems) =>
+                  tapToCall ? (
+                    <a
+                      key={`ems-tel-${ems.number}`}
+                      href={telHref(ems.number)}
+                      className={`${telLinkClass} min-h-[3.25rem] bg-danger text-base font-semibold text-void hover:opacity-90 sm:text-lg`}
+                    >
+                      {zh ? ems.labelZh : ems.labelEn}
+                    </a>
+                  ) : (
+                    <div
+                      key={`ems-card-${ems.number}`}
+                      className="rounded-2xl border-2 border-danger/35 bg-danger/5 px-4 py-4 text-center sm:px-5 sm:py-5"
+                    >
+                      <p className="text-xs font-medium uppercase tracking-wide text-mist">
+                        {zh ? "緊急服務" : "Emergency services"}
+                      </p>
+                      <p className="mt-2 text-sm font-medium leading-snug text-fog">
+                        {zh ? ems.labelZh : ems.labelEn}
+                      </p>
+                      <p className="mt-2 font-mono text-4xl font-semibold tracking-wide text-fog sm:text-5xl">
+                        {ems.number}
+                      </p>
+                      {ems.subnoteEn ? (
+                        <p className="mt-2 text-xs leading-relaxed text-mist">
+                          {zh ? ems.subnoteZh : ems.subnoteEn}
                         </p>
-                        {line.tel ? (
-                          <p className="shrink-0 font-mono text-xl font-semibold tracking-wide text-ember sm:text-2xl">
-                            {line.tel}
-                          </p>
+                      ) : null}
+                    </div>
+                  ),
+                )}
+
+                {showUnknownEmsCopy ? (
+                  <div className="rounded-2xl border-2 border-danger/35 bg-danger/5 px-4 py-4 text-center sm:px-5 sm:py-5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-mist">
+                      {zh ? "緊急服務" : "Emergency services"}
+                    </p>
+                    <p className="mt-3 text-base font-semibold leading-snug text-fog sm:text-lg">
+                      {zh ? emergencyDisplay.labelZh : emergencyDisplay.labelEn}
+                    </p>
+                    {emergencyDisplay.subnoteEn ? (
+                      <p className="mt-2 text-xs leading-relaxed text-mist">
+                        {zh
+                          ? emergencyDisplay.subnoteZh
+                          : emergencyDisplay.subnoteEn}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {!tapToCall && primaryEmsDisplays.length > 0 ? (
+                  <p className="text-center text-xs leading-relaxed text-mist">
+                    {zh
+                      ? "此裝置可能無法直接撥打電話，請手動撥號或使用另一部電話。"
+                      : "This device may not place calls directly — dial manually or use another phone."}
+                  </p>
+                ) : null}
+
+                {showCrisisLines && crisisLines.length > 0 ? (
+                  tapToCall ? (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-mist">
+                        {crisisHeading(zh)}
+                      </p>
+                      {crisisLines.map((line) =>
+                        line.tel ? (
+                          <a
+                            key={`crisis-${line.name}-${line.tel}`}
+                            href={telHref(line.tel)}
+                            className={`${telLinkClass} bg-ember text-sm font-semibold text-void hover:bg-ember-bright sm:text-base`}
+                          >
+                            {zh ? line.labelZh : line.labelEn}
+                          </a>
                         ) : line.sms ? (
-                          <p className="shrink-0 text-sm text-mist">
-                            SMS: {line.sms}
-                          </p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+                          <a
+                            key={`crisis-sms-${line.name}-${line.sms}`}
+                            href={`sms:${line.sms.replace(/\s/g, "")}`}
+                            className={`${telLinkClass} bg-deep text-sm font-semibold text-fog ring-1 ring-line hover:bg-moss sm:text-base`}
+                          >
+                            {zh ? line.labelZh : line.labelEn} (SMS)
+                          </a>
+                        ) : null,
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-ember/35 bg-ember/5 px-4 py-3 sm:px-5 sm:py-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-mist">
+                        {crisisHeading(zh)}
+                      </p>
+                      <ul className="mt-3 divide-y divide-line/80">
+                        {crisisLines.map((line) => (
+                          <li
+                            key={`crisis-${line.name}-${line.tel ?? line.sms}`}
+                            className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                          >
+                            <p className="text-sm font-medium leading-snug text-fog">
+                              {zh ? line.labelZh : line.labelEn}
+                            </p>
+                            {line.tel ? (
+                              <p className="shrink-0 font-mono text-xl font-semibold tracking-wide text-fog sm:text-2xl">
+                                {line.tel}
+                              </p>
+                            ) : line.sms ? (
+                              <p className="shrink-0 text-sm text-mist">
+                                SMS: {line.sms}
+                              </p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                ) : null}
 
-              {venueLines.length > 0 ? (
-                <div className="rounded-2xl border border-line bg-deep px-4 py-3 sm:px-5 sm:py-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-mist">
-                    {secondaryHeading(zh)}
-                  </p>
-                  <ul className="mt-3 divide-y divide-line">
-                    {venueLines.map((line) => (
-                      <li
-                        key={`${line.source}-${line.tel}-${line.labelEn}`}
-                        className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                      >
-                        <p className="text-sm font-medium leading-snug text-fog">
+                {venueLines.length > 0 ? (
+                  tapToCall ? (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-mist">
+                        {secondaryHeading(zh)}
+                      </p>
+                      {venueLines.map((line) => (
+                        <a
+                          key={`${line.source}-${line.tel}-${line.labelEn}`}
+                          href={telHref(line.tel)}
+                          className={`${telLinkClass} bg-deep text-sm font-semibold text-fog ring-1 ring-line hover:bg-moss sm:text-base`}
+                        >
                           {zh ? line.labelZh : line.labelEn}
-                        </p>
-                        <p className="shrink-0 font-mono text-xl font-semibold tracking-wide text-ember sm:text-2xl">
-                          {line.tel}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          )}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-line bg-deep px-4 py-3 sm:px-5 sm:py-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-mist">
+                        {secondaryHeading(zh)}
+                      </p>
+                      <ul className="mt-3 divide-y divide-line">
+                        {venueLines.map((line) => (
+                          <li
+                            key={`${line.source}-${line.tel}-${line.labelEn}`}
+                            className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                          >
+                            <p className="text-sm font-medium leading-snug text-fog">
+                              {zh ? line.labelZh : line.labelEn}
+                            </p>
+                            <p className="shrink-0 font-mono text-xl font-semibold tracking-wide text-fog sm:text-2xl">
+                              {line.tel}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                ) : null}
+              </div>
+            );
+          })()}
 
           <p className="mt-5 text-center text-xs leading-relaxed text-mist">
             {zh ? "更多危機熱線：" : "More crisis lines:"}{" "}

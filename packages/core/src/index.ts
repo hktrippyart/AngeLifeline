@@ -151,6 +151,7 @@ export {
 
 export {
   classifyDeviceTelephony,
+  classifyDeviceTelephonyClient,
   type DeviceTelephonyClass,
 } from "./device-capabilities";
 
