@@ -30,7 +30,7 @@ export interface RuleResult {
   hits: RuleHit[];
 }
 
-const MAX_LEN = 2000; // 超過就截斷，避免過長輸入拖慢
+const MAX_LEN = 2000; // 超過就只睇頭尾，避免過長輸入拖慢
 
 /* ------------------------------------------------------------------ */
 /* 1. 正規化                                                            */
@@ -48,8 +48,16 @@ function leet(w: string): string {
   return w.replace(/1/g, "i").replace(/0/g, "o").replace(/3/g, "e").replace(/@/g, "a").replace(/\$/g, "s");
 }
 
+// 過長輸入：保留頭尾各一半。只取開頭會漏咗最尾一句，而最緊要嘅通常喺最後
+// （maskPII 同樣保留最近嘅內容）。
+function headAndTail(t: string): string {
+  if (t.length <= MAX_LEN) return t;
+  const half = Math.floor(MAX_LEN / 2);
+  return `${t.slice(0, half)} ${t.slice(-half)}`;
+}
+
 export function normalizeText(input: string): string {
-  let t = String(input ?? "").slice(0, MAX_LEN).normalize("NFKC").toLowerCase();
+  let t = headAndTail(String(input ?? "")).normalize("NFKC").toLowerCase();
   t = t.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, ""); // 零寬字元
   t = t.replace(/[\u2018\u2019\u02BC\u0060\u00B4]/g, "'"); // 彎引號
   t = Array.from(t, (c) => S2T.get(c) ?? c).join("");
@@ -204,6 +212,22 @@ export const RULES: Rule[] = [
     match: rx("high", /(?:好?想|只想|就想|諗住|打算|準備|決定)\s*(?:去|返)?\s*(?:死|一死了之|了斷)/, wantDieGuard),
   },
   {
+    // 「我想殺死自己」「我要殺咗自己」：zh.want_die 要求「想」後面緊接「死」，所以接唔住
+    id: "zh.kill_self",
+    category: "self_harm",
+    match: rx(
+      "high",
+      /(?:殺|斬|砍|刺|弄)\s*(?:死|咗|左|了)?\s*(?:我?自己|自身)|(?:打死|整死|搞死)\s*(?:我?自己|自身)/,
+      hyperboleBefore,
+    ),
+  },
+  {
+    // 同 en.self_harm 一致：傷害自己係 review，等模型或者柔和提示處理
+    id: "zh.harm_self",
+    category: "self_harm",
+    match: rx("review", /自殘|自残|(?:傷害|割|燙|虐待)\s*(?:傷)?\s*(?:我?自己|自身)/),
+  },
+  {
     id: "zh.not_want_live",
     category: "self_harm",
     match: rx("high", /(?:唔|不|冇|沒)(?:想|願意|願|肯)(?:再)?(?:活|生存|做人)/, hyperboleBefore),
@@ -309,7 +333,8 @@ export const RULES: Rule[] = [
     category: "medical",
     match: rx(
       "high",
-      /\boverdos(?:e|ed|ing)|\bod'?(?:d|ed)\b|\bod(?=咗|左|了)|\b(?:took|swallowed|ate|taken)\s+(?:too\s+many|a\s+lot\s+of|a\s+whole\s+bunch\s+of|the\s+whole\s+bottle\s+of|way\s+too\s+(?:many|much))\s+(?:pills|tablets|meds|medication|painkillers|sleeping)/,
+      // 「od'd」「oded」要有撇號或者 -ed，唔可以寫成 \bod'?d\b，否則 "odd"（「I feel odd」）會誤報
+      /\boverdos(?:e|ed|ing)|\bod(?:'d|ed)\b|\bod(?=咗|左|了)|\b(?:took|swallowed|ate|taken)\s+(?:too\s+many|a\s+lot\s+of|a\s+whole\s+bunch\s+of|the\s+whole\s+bottle\s+of|way\s+too\s+(?:many|much))\s+(?:pills|tablets|meds|medication|painkillers|sleeping)/,
     ),
   },
   {

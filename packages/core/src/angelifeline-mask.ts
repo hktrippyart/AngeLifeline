@@ -7,6 +7,7 @@
 // - 姓名、地址、工作地點、病情冇辦法靠規則攔截，所以只可以講「已移除常見個人識別資料」，唔可以講「匿名」。
 // - 999、112 等短號碼唔會被遮。
 // - 日期（2026-10-01）有機會被誤判做電話，屬可接受嘅誤報。
+// - 身份證要冇空格或者有括號檢查碼才認得；「A 123456」呢種寫法會漏。
 
 export type MaskCounts = Record<string, number>;
 
@@ -39,7 +40,10 @@ interface MaskRule {
 // 次序有關：由最具體到最籠統
 const MASK_RULES: MaskRule[] = [
   { type: "email", re: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, replace: "[email]" },
-  { type: "hkid", re: /\b[A-Z]{1,2}\s?\d{6}\s?(?:\(?[0-9A]\)?)?/gi, replace: "[id]" },
+  // 身份證要麼冇空格（A123456 / AB123456(7)），要麼有括號檢查碼（A 123456 (7)）。
+  // 唔可以寫成 [A-Z]{1,2}\s?\d{6}，否則「is 91234567」嘅「is 912345」會被當身份證，
+  // 電話規則就冇機會跑，號碼會標錯 [id]。
+  { type: "hkid", re: /\b[A-Z]{1,2}\s?\d{6}\s?\([0-9A]\)|\b[A-Z]{1,2}\d{6}(?:\(?[0-9A]\)?)?\b/gi, replace: "[id]" },
   { type: "cnid", re: /\b\d{17}[\dXx]\b/g, replace: "[id]" },
   { type: "card", re: /\b(?:\d[ -]?){13,19}\b/g, replace: "[card]", validate: luhn },
   {

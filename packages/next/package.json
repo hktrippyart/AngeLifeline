@@ -10,7 +10,7 @@
     "./crisis-triage": "./src/crisis-triage.ts"
   },
   "dependencies": {
-    "@angelifeline/core": "0.3.0",
+    "@angelifeline/core": "^0.3.1",
     "zod": "^4.6.5"
   },
   "peerDependencies": {

@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "peerDependencies": {
-    "@angelifeline/core": "0.2.0",
+    "@angelifeline/core": "^0.3.1",
     "react": "^19",
     "react-dom": "^19"
   },

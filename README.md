@@ -26,6 +26,7 @@ Detection is **layered**. Design goals: **never miss obvious literal crisis word
 | **2. PII mask** | Browser, then server again | `maskPII()` strips common identifiers (email, HK/CN ID patterns, Luhn-valid cards, long phone numbers). Short codes like **999** / **112** are not masked. |
 | **3. LLM judge** | Server only | `POST /api/angelifeline/judge` receives **already masked** text, masks again, calls Gemini with a fixed JSON schema (`urgent` / `concern` / `none`). Temperature **0**, server timeout ~**2.5s** (client race ~**3s**). |
 | **4. Merge** | `processMessage()` or `resolveHardCrisis()` | **Overlay**: rule `high`, judge `urgent`, or rule `review` + judge `concern` (configurable). **Soft prompt**: judge `concern` without escalation. |
+| **4b. Cross-message** | `processMessage()` only | A single `concern` is only a soft prompt, but **two `concern` verdicts within `concernWindowMessages`** open the overlay (`reason: "repeat_llm_concern"`). Uses only message indices held in the in-memory `Session` — **no extra text is sent anywhere**. A judge `none` is not banked: the model saw the context and cleared it. |
 | **5. Fail-safe** | Same | Judge timeout, error, block, or invalid JSON → treat as unavailable; **review** rules still escalate; **static EMS table** always fills the overlay (AI lookup never replaces primary emergency digits). |
 
 **Important:** Rule **`high`** cannot be overridden by the LLM (the judge is not called on that path).
@@ -64,6 +65,8 @@ const { action, followUp, debug } = await processMessage(session, userText, {
   config: {
     siteRegion: "HK",
     judgeTimeoutMs: 3000,
+    repeatConcernEscalates: true, // two `concern` turns in a row open the overlay
+    concernWindowMessages: 3,
     knownEvents: [{ name: "Clockenflap Festival", region: "HK" }],
   },
 });
@@ -257,12 +260,14 @@ import { buildAngeLifelineNumbersBlockForChat } from "@angelifeline/core";
 | `angelifeline-judge-server.ts` | Gemini judge + `handleJudgePost` |
 | `resolve-hard-crisis.ts` | Server merge (rules + judge) |
 
-Tests (Node 22.6+):
+Tests (Node 22.15+ / 24; run in CI on both):
 
 ```bash
 cd packages/core && npm test
-# angelfeline-rules.test.ts + angelfeline-pipeline.test.ts
+# angelifeline-rules.test.ts + angelifeline-pipeline.test.ts + angelifeline-mask.test.ts
 ```
+
+No `npm install` needed — the tests only use Node builtins and local source. `scripts/node-ts-resolve.mjs` is a dependency-free resolve hook so `node --test` can run the TypeScript source with the extensionless imports that bundlers expect.
 
 ---
 

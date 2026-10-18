@@ -4,6 +4,7 @@
 //   2. 本地遮蔽個人資料
 //   3. LLM 判斷（只收遮蔽後嘅文字；3 秒超時；固定 JSON 格式）
 //   4. 合併決定：規則 high 或者 LLM urgent → overlay；LLM concern → 柔和提示
+//      （跨句累積：短時間內重複 concern → overlay，只用 session 內嘅訊號次序，唔會多送文字出去）
 //   5. LLM 失敗／超時／被擋／空白 → 退返去規則同靜態緊急電話，overlay 永遠唔會空白
 //   6. 緊急電話按地區揀（地點提示 > 時區 > 瀏覽器語言 > 訊息語言 > 網站預設）
 //   7. Overlay 彈咗但未知地點：之後幾句訊息留意用戶有冇提供地點／活動，有就更新 overlay
@@ -74,7 +75,12 @@ export interface EmsCard {
   venue?: { name?: string; note?: string };
 }
 
-export type OverlayReason = "rule_high" | "llm_urgent" | "rule_review+llm_concern" | "rule_review_llm_unavailable";
+export type OverlayReason =
+  | "rule_high"
+  | "llm_urgent"
+  | "rule_review+llm_concern"
+  | "rule_review_llm_unavailable"
+  | "repeat_llm_concern";
 
 export type Action =
   | { type: "overlay"; reason: OverlayReason; categories: string[]; ems: EmsCard; repeat: boolean }
@@ -91,6 +97,7 @@ export interface Debug {
   lang: Lang;
   region: string;
   regionConfidence: "known" | "guess";
+  concernSignals?: number; // 窗口內嘅 concern 次數（只係數字）
   // 刻意冇用戶原文
 }
 
@@ -112,6 +119,8 @@ export interface PipelineConfig {
   lookupTimeoutMs: number;
   awaitWindowMessages: number; // overlay 之後追蹤地點幾多句
   reviewPlusConcernEscalates: boolean; // 規則 review + LLM concern → overlay
+  repeatConcernEscalates: boolean; // 窗口內重複 LLM concern → overlay（跨句累積）
+  concernWindowMessages: number; // 重複 concern 嘅窗口（幾多句內算重複）
   knownEvents: { name: string; region?: string }[]; // 你自己維護嘅活動／場地名單
 }
 
@@ -121,6 +130,8 @@ export const DEFAULT_CONFIG: PipelineConfig = {
   lookupTimeoutMs: 2500,
   awaitWindowMessages: 6,
   reviewPlusConcernEscalates: true,
+  repeatConcernEscalates: true,
+  concernWindowMessages: 3,
   knownEvents: [],
 };
 
@@ -141,10 +152,20 @@ export interface Session {
   awaitingPlace: boolean;
   sinceOverlay: number;
   usedHints: string[];
+  /** LLM 判 concern 嘅訊息序號（只係序號，冇用戶內容），用嚟做跨句累積 */
+  concernAtMessages: number[];
 }
 
 export function createSession(): Session {
-  return { messageCount: 0, langVotes: {}, lastLang: "unknown", awaitingPlace: false, sinceOverlay: 0, usedHints: [] };
+  return {
+    messageCount: 0,
+    langVotes: {},
+    lastLang: "unknown",
+    awaitingPlace: false,
+    sinceOverlay: 0,
+    usedHints: [],
+    concernAtMessages: [],
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -400,7 +421,7 @@ export function inferRegion(
   if (loc) return { region: loc, confidence: "guess" };
   const fromLang = regionFromSessionLang(session);
   if (fromLang) return { region: fromLang, confidence: "guess" };
-  if (EMS[cfg.siteRegion]) return { region: cfg.siteRegion, confidence: "guess" };
+  // siteRegion 認唔認得都返回：buildCard 會退返去 112 卡，overlay 唔會空白
   return { region: cfg.siteRegion, confidence: "guess" };
 }
 
@@ -422,7 +443,7 @@ function buildMultiRegionGuessCard(
       });
     }
   }
-  if (!numbers.length) return universalFallbackCard(regionKey, confidence);
+  if (!numbers.length) return universalFallbackCard(regionKey);
   return {
     region: regionKey,
     regionLabel,
@@ -457,7 +478,8 @@ function buildUsGbGuessCard(confidence: "known" | "guess"): EmsCard {
   );
 }
 
-function universalFallbackCard(region: string, confidence: "known" | "guess"): EmsCard {
+// 唔知地區：confidence 一定係 guess，所以唔收 confidence 參數
+function universalFallbackCard(region: string): EmsCard {
   return {
     region,
     regionLabel: { zh: "當地緊急服務", en: "Local emergency services" },
@@ -487,7 +509,7 @@ export function buildCard(
     r = fallbackRegion;
     info = EMS[fallbackRegion];
   }
-  if (!info) return universalFallbackCard(region, confidence);
+  if (!info) return universalFallbackCard(region);
   return {
     region: r,
     regionLabel: info.label,
@@ -626,6 +648,20 @@ export async function processMessage(session: Session, text: string, deps: Pipel
     }
   }
 
+  // 跨句累積：單句 concern 只值一個柔和提示，但窗口內重複出現就當 overlay。
+  // 只讀 session 內嘅訊息序號，唔會多送任何文字出去（零額外隱私成本）。
+  // LLM 判 none 唔會入帳：LLM 睇得到語境，佢清咗就算清咗。
+  if (!overlayReason && soft) {
+    const windowStart = session.messageCount - cfg.concernWindowMessages;
+    const recent = session.concernAtMessages.filter((n) => n > windowStart);
+    session.concernAtMessages = [...recent, session.messageCount];
+    debug.concernSignals = session.concernAtMessages.length;
+    if (cfg.repeatConcernEscalates && recent.length > 0) {
+      overlayReason = "repeat_llm_concern";
+      soft = false;
+    }
+  }
+
   let action: Action = { type: "none" };
   let followUp: Promise<Action | null> | undefined;
 
@@ -636,6 +672,7 @@ export async function processMessage(session: Session, text: string, deps: Pipel
     session.overlay = { atMessage: session.messageCount, region: card.region, confidence };
     session.awaitingPlace = confidence !== "known";
     session.sinceOverlay = 0;
+    session.concernAtMessages = []; // overlay 已經彈過，重新計，唔好一 dismiss 就再彈
     if (hint) session.usedHints.push(hint.text.toLowerCase());
     action = { type: "overlay", reason: overlayReason, categories: Array.from(categories), ems: card, repeat };
     debug.region = card.region;

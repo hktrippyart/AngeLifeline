@@ -1,4 +1,4 @@
-// 執行：node --experimental-strip-types --test angelifeline-rules.test.ts   （Node 22.6 或以上；Node 23.6+ 唔使加 flag）
+// 執行：npm test -w @angelifeline/core（Node 22.15 或以上）
 // 如果用 vitest／jest：將頭兩行 import 改成對應嘅 describe/it/expect，邏輯唔使改。
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -33,6 +33,9 @@ const MUST_HIGH: string[] = [
   "我覺得自己係個負累，冇咗我大家會好啲",
   "我已经寫好遗书了",
   "我想自杀",
+  "我想殺死自己",
+  "我要殺咗自己",
+  "我今晚就弄死自己",
   "我朋友話佢想自殺，而家唔接我電話",
   "我唔想再活落去",
   // 寫法變化
@@ -89,6 +92,9 @@ const MUST_NOT_HIGH: string[] = [
   "The baby is babbling happily in the crib",
   "我想殺死一隻蟑螂",
   "呢隻遊戲殺死我嘅時間",
+  "I feel odd tonight, is that normal?",
+  "that's odd, the music sounds slower",
+  "the odds of a bad trip are low",
   "我哋食咗藥，聽日再覆診",
   "新聞報道自殺率上升",
   "She killed it on the dance floor last night",
@@ -105,9 +111,16 @@ test("日常誇張講法唔可以 high", () => {
 });
 
 test("模稜兩可嘅應該係 review", () => {
-  for (const s of ["做功課做到想死", "I laughed so hard I couldn't breathe.", "My boss is going to kill me", "kms lol", "我想消失", "新聞報道自殺率上升"]) {
+  for (const s of ["做功課做到想死", "I laughed so hard I couldn't breathe.", "My boss is going to kill me", "kms lol", "我想消失", "新聞報道自殺率上升", "我有時會傷害自己", "I keep cutting myself"]) {
     assert.equal(level(s), "review", s);
   }
+});
+
+test("OD 只認 od'd / oded / od咗，唔會撞到 odd", () => {
+  assert.equal(level("我個friend OD咗，而家冇反應"), "high");
+  assert.equal(level("he OD'd on the dancefloor"), "high");
+  assert.equal(level("she ODed last night"), "high");
+  assert.equal(detectRules("I feel odd tonight").hits.length, 0);
 });
 
 test("完全冇事嘅句子係 none", () => {
@@ -132,6 +145,12 @@ test("極長／空輸入唔會出錯", () => {
   assert.equal(detectRules("").level, "none");
   assert.equal(detectRules("a".repeat(100000)).level, "none");
   assert.equal(detectRules("想死".repeat(5000)).level, "high");
+});
+
+test("極長訊息：危機字眼喺開頭或者結尾都捉得到", () => {
+  const filler = "今日天氣好好，我哋去行山。".repeat(500);
+  assert.equal(detectRules(`${filler}我想自殺`).level, "high");
+  assert.equal(detectRules(`我想自殺。${filler}`).level, "high");
 });
 
 test("decide：high 規則唔使問模型", () => {

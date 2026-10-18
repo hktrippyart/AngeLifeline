@@ -21,7 +21,7 @@
     "./gemini-generation-config": "./src/gemini-generation-config.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/angelifeline-rules.test.ts src/angelifeline-pipeline.test.ts"
+    "test": "node --import ./scripts/node-ts-resolve.mjs --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@google/genai": "^2.23.0",

@@ -1,5 +1,5 @@
-// 執行：node --experimental-strip-types --no-warnings --test angelifeline-pipeline.test.ts
-// （Node 22.6 或以上；Node 23.6+ 唔使加 flag。用 vitest／jest 嘅話，將頭兩行 import 改成對應嘅 API。）
+// 執行：npm test -w @angelifeline/core（Node 22.15 或以上）
+// 用 vitest／jest 嘅話，將頭兩行 import 改成對應嘅 API，邏輯唔使改。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { detectRules } from "./angelifeline-rules";
@@ -65,6 +65,59 @@ test("規則 review + LLM concern → overlay（可以用 config 關閉）", asy
 test("規則 review + LLM 話冇事 → 冇事（LLM 睇到語境）", async () => {
   const r = await processMessage(createSession(), "做功課做到想死", base({ judge: judgeOf("none").judge }));
   assert.equal(r.action.type, "none");
+});
+
+/* ---------- 3b. 跨句累積（session 本地記憶，唔多送文字） ---------- */
+test("窗口內重複 concern → overlay（單句仍然只係柔和提示）", async () => {
+  const s = createSession();
+  const judge = judgeOf("concern").judge;
+  const r1 = await processMessage(s, "今日好攰，好冇動力", base({ judge }));
+  assert.equal(r1.action.type, "soft_prompt");
+  assert.equal(r1.debug.concernSignals, 1);
+
+  const r2 = await processMessage(s, "我唔知仲撐唔撐得住", base({ judge }));
+  assert.equal(r2.action.type, "overlay");
+  assert.equal(r2.action.type === "overlay" && r2.action.reason, "repeat_llm_concern");
+  assert.ok(r2.action.type === "overlay" && r2.action.ems.numbers.length > 0);
+});
+
+test("concern 隔得太遠唔算重複", async () => {
+  const s = createSession();
+  const concern = judgeOf("concern").judge;
+  const none = judgeOf("none").judge;
+  await processMessage(s, "今日好攰", base({ judge: concern }));
+  for (let i = 0; i < 3; i++) await processMessage(s, "ok", base({ judge: none }));
+  const r = await processMessage(s, "都係好冇動力", base({ judge: concern }));
+  assert.equal(r.action.type, "soft_prompt");
+});
+
+test("LLM 判 none 唔會入帳，亦唔會清走窗口", async () => {
+  const s = createSession();
+  await processMessage(s, "今日好攰", base({ judge: judgeOf("concern").judge }));
+  const mid = await processMessage(s, "今日天氣好好", base({ judge: judgeOf("none").judge }));
+  assert.equal(mid.action.type, "none");
+  assert.equal(mid.debug.concernSignals, undefined);
+  const r = await processMessage(s, "又開始好灰", base({ judge: judgeOf("concern").judge }));
+  assert.equal(r.action.type === "overlay" && r.action.reason, "repeat_llm_concern");
+});
+
+test("可以用 config 關閉跨句累積", async () => {
+  const s = createSession();
+  const deps = base({ judge: judgeOf("concern").judge, config: { repeatConcernEscalates: false } });
+  await processMessage(s, "今日好攰", deps);
+  const r = await processMessage(s, "好冇動力", deps);
+  assert.equal(r.action.type, "soft_prompt");
+});
+
+test("overlay 彈過之後重新計 concern，唔會一 dismiss 就再彈", async () => {
+  const s = createSession();
+  const judge = judgeOf("concern").judge;
+  await processMessage(s, "今日好攰", base({ judge }));
+  const up = await processMessage(s, "撐唔住", base({ judge }));
+  assert.equal(up.action.type, "overlay");
+  assert.deepEqual(s.concernAtMessages, []);
+  const after = await processMessage(s, "都係好灰", base({ judge }));
+  assert.equal(after.action.type, "soft_prompt");
 });
 
 /* ---------- 4. 失敗、超時、被擋、空白 ---------- */
@@ -261,7 +314,11 @@ test("語言偵測、地區推斷、地點提示抽取", () => {
   assert.equal(regionFromTimezone("Australia/Sydney"), "AU");
   assert.equal(regionFromTimezone("America/Toronto"), "CA");
   assert.equal(regionFromLocale("zh-HK"), "HK");
-  assert.equal(regionFromLocale("en-US"), "US");
+  assert.equal(regionFromLocale("ja-JP"), "JP");
+  // 任何英文 locale 都顯示 911 + 999；任何繁中 locale 都顯示香港 + 台灣
+  assert.equal(regionFromLocale("en-US"), "US_GB");
+  assert.equal(regionFromLocale("en"), "US_GB");
+  assert.equal(regionFromLocale("zh-Hant-TW"), "HK_TW");
   assert.equal(extractPlaceHint("我喺灣仔")?.region, "HK");
   assert.equal(extractPlaceHint("I'm at Zero Club")?.kind, "phrase");
   assert.equal(extractPlaceHint("I'm in pain"), null);
