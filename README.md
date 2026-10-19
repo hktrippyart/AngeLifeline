@@ -2,13 +2,15 @@
 
 **AngeLifeline** is an open-source **crisis overlay** for chat-style apps: when a message looks like an emergency, it takes over the screen and shows local emergency numbers (and optional venue lookup). It is **not** the AI model or the chat API—it sits on top of whatever UI already handles messages.
 
+It is also **model-agnostic**. The classifier (the “judge”) is a function you inject, so it can be the chat model you already run, a separate small model, or nothing at all. What AngeLifeline owns is the deterministic half: the rules, the merge policy, the timeout and fail-safe behaviour, and the static emergency-number table. Judge accuracy is yours—see [Judge contract](#judge-contract-bring-your-own-model).
+
 Packages and embed instructions live in this repository ([github.com/hktrippyart/AngeLifeline](https://github.com/hktrippyart/AngeLifeline)): `@angelifeline/core`, `@angelifeline/react`, and `@angelifeline/next` (npm when published, or clone for local dev).
 
 Monorepo:
 
 | Package | Use |
 |---------|-----|
-| `@angelifeline/core` | Rules engine, crisis pipeline, PII mask, judge server, routing, helplines |
+| `@angelifeline/core` | Rules engine, crisis pipeline, PII mask, routing, helplines — plus an **optional** reference judge |
 | `@angelifeline/react` | `AngeLifelineOverlay` UI |
 | `@angelifeline/next` | App Router `POST` handlers for venue + crisis APIs |
 
@@ -18,18 +20,46 @@ This repo’s Next.js app is a **live sandbox** (`npm run dev`).
 
 ## Crisis detection (how it works)
 
-Detection is **layered**. Design goals: **never miss obvious literal crisis wording**, **do not send raw PII to the LLM**, and **never show an empty overlay** if the model fails.
+Detection is **layered**. Design goals: **never miss obvious literal crisis wording**, **do not send raw PII to the judge**, and **never show an empty overlay** if the model fails.
 
 | Step | Where | What |
 |------|--------|------|
 | **1. Rules (raw text)** | Browser or server | `detectRules()` on the **original** user message. **`high`** (e.g. explicit self-harm, violence, or medical emergency wording in English, Chinese, or mixed input) → open overlay **immediately**—no LLM, no network. |
 | **2. PII mask** | Browser, then server again | `maskPII()` strips common identifiers (email, HK/CN ID patterns, Luhn-valid cards, long phone numbers). Short codes like **999** / **112** are not masked. |
-| **3. LLM judge** | Server only | `POST /api/angelifeline/judge` receives **already masked** text, masks again, calls Gemini with a fixed JSON schema (`urgent` / `concern` / `none`). Temperature **0**, server timeout ~**2.5s** (client race ~**3s**). |
+| **3. Judge (any model)** | Your endpoint | The `Judge` you inject receives **already masked** text and returns `urgent` / `concern` / `none`. Model, prompt, and hosting are yours. AngeLifeline enforces only the timeout race (client ~**3s**) and strict parsing. The optional **reference judge** (`POST /api/angelifeline/judge`, temperature **0**, ~**2.5s**) is one implementation you can use as-is or replace. |
 | **4. Merge** | `processMessage()` or `resolveHardCrisis()` | **Overlay**: rule `high`, judge `urgent`, or rule `review` + judge `concern` (configurable). **Soft prompt**: judge `concern` without escalation. |
 | **4b. Cross-message** | `processMessage()` only | A single `concern` is only a soft prompt, but **two `concern` verdicts within `concernWindowMessages`** open the overlay (`reason: "repeat_llm_concern"`). Uses only message indices held in the in-memory `Session` — **no extra text is sent anywhere**. A judge `none` is not banked: the model saw the context and cleared it. |
 | **5. Fail-safe** | Same | Judge timeout, error, block, or invalid JSON → treat as unavailable; **review** rules still escalate; **static EMS table** always fills the overlay (AI lookup never replaces primary emergency digits). |
 
-**Important:** Rule **`high`** cannot be overridden by the LLM (the judge is not called on that path).
+### Rule levels
+
+`detectRules()` returns one of three results, and each is handled differently:
+
+| Result | Judge | Overlay |
+|--------|-------|---------|
+| **`high`** — literal, unambiguous wording: explicit suicidal intent, a suicide note, weapon threats, not breathing, unresponsive, seizure, choking, overdose (English and Chinese equivalents) | **Not called** | Opens **immediately**, before any network call |
+| **`review`** — plausible but context-dependent: `can't breathe`, `collapsed`, `kms`, cramp, or Chinese phrasing that is usually exhaustion rather than intent | Called | Judge `urgent`/`concern` → overlay; judge `none` → nothing; judge unavailable → overlay (fail-safe) |
+| no match | Called | Only judge `urgent` opens the overlay; `concern` is a soft prompt |
+
+**Guarantee:** rule `high` opens the overlay with **zero latency and no network call**, and **no model can downgrade it**—the judge is never consulted on that path. Guards do the opposite where idioms are involved: `kill myself laughing`, `dying of embarrassment`, the Cantonese phrase that reads literally as “want to die” but means “I miss you”, and news-style discussion of suicide rates are all demoted to `review` by the rules themselves.
+
+### Judge contract (bring your own model)
+
+```ts
+type Judge = (maskedText: string, signal: AbortSignal) => Promise<unknown>;
+```
+
+Wire anything: your chat model, a dedicated classifier, a hosted API, or a local model. `createHttpJudge(url)` is just a convenience adapter to your own endpoint, and `judge` is **optional**—omit it and the pipeline runs rules-only.
+
+Your judge should:
+
+- return `{ level, category }` (or a JSON string containing it) where `level` is `"urgent" | "concern" | "none"`;
+- return `null` or `""` when the model refuses or returns nothing (treated as **blocked**);
+- throw on transport errors, and honour the `AbortSignal`.
+
+AngeLifeline then guarantees, independent of your model: the timeout race, strict parsing (anything unparseable counts as unavailable, never as `none`), the fail-safe escalation of `review` rules, and a non-empty EMS card.
+
+**AngeLifeline makes no accuracy claim about your judge.** Precision and recall depend entirely on the model and prompt you choose. To measure what you are actually getting, run your judge against `MUST_HIGH` / `MUST_NOT_HIGH` in `packages/core/src/angelifeline-rules.test.ts`—about 90 labelled Cantonese, Chinese, and English messages, including the hyperbole cases that cause most false positives.
 
 ### Recommended client flow
 
@@ -99,13 +129,24 @@ Legacy **`fetchCrisisTriage`** → `POST /api/angelifeline/crisis-triage` still 
 - **Known place / event** in text → higher confidence region; optional **venue lookup** sends **only the place hint** (not the full chat) to your existing venue route. AI-returned numbers are **extras** with “verify” framing—they **do not** replace static EMS.
 - After an overlay opens **without** a known place, the pipeline **watches the next few user messages** for location hints and can emit `overlay_update`.
 
+### Detection limits
+
+State these plainly to anyone who embeds this:
+
+- **Rules ship for English and Chinese only** (Cantonese colloquial, Traditional, and Simplified via normalisation). For any other language `detectRules()` returns `none`, so there is **no zero-latency, deterministic trigger**—detection falls entirely to the judge you inject. The fail-safe still works, but it can only fire on wording the rules recognise.
+- **Rules are pattern-based.** Indirect, metaphorical, or deliberately obfuscated wording is missed, and spaced-out spellings (`k i l l`) are not handled. The test corpus defines current behaviour; treat anything outside it as unverified.
+
 ### PII masking limits
 
-Document honestly: masking catches **formatted** identifiers, not names, addresses, or free-text medical detail. Say “common identifiers removed,” not “fully anonymous.” See `angelifeline-mask.ts`.
+Document honestly: masking catches **formatted** identifiers, not names, addresses, or free-text medical detail. Say “common identifiers removed,” not “fully anonymous.” Hong Kong IDs are only recognised without spaces or with a bracketed check digit, and non-HK/CN formats (for example Singapore NRIC) are out of scope. See `angelifeline-mask.ts`.
 
 ### Judge prompt
 
-System prompt lives in `angelifeline-judge-prompt.ts` (`JUDGE_PROMPT_VERSION`). Keep it in sync with any offline eval notebook before changing behavior.
+A judge needs instructions telling the model how to classify. The reference judge ships those in `angelifeline-judge-prompt.ts`: how to pick `urgent` / `concern` / `none`, which Cantonese and English exaggerations to treat as harmless, and a rule never to obey instructions written inside a user message.
+
+You only need this file if you use the reference judge. **Bringing your own model means bringing your own prompt** — AngeLifeline only requires the `level` / `category` output shape, so the shipped prompt is a useful starting point, not a requirement.
+
+If you do edit the prompt, bump `JUDGE_PROMPT_VERSION` and re-measure. Any accuracy numbers you collected describe the old prompt, not the new one.
 
 ---
 
@@ -160,7 +201,8 @@ export { POST } from "@angelifeline/next/crisis-helplines";
 // app/api/angelifeline/crisis-triage/route.ts
 export { POST } from "@angelifeline/next/crisis-triage";
 
-// app/api/angelifeline/judge/route.ts — LLM triage on masked text only
+// app/api/angelifeline/judge/route.ts — optional; only if you want the reference
+// judge instead of pointing createHttpJudge at your own model endpoint
 import { handleJudgePost } from "@angelifeline/core/angelifeline-judge-server";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -170,8 +212,10 @@ export async function POST(request: Request) {
 
 ### 4. Environment
 
+Every key below is optional. The `GEMINI_*` keys are the credentials of the **reference judge** and the venue lookup, which currently call Google's Gemini API — a host that plugs in its own model does not need any of them, and would use that provider's own key instead.
+
 ```env
-GEMINI_API_KEY=              # judge + venue search grounding (server only)
+GEMINI_API_KEY=              # reference judge + venue search grounding (server only)
 GEMINI_JUDGE_MODEL=          # optional; default gemini-2.5-flash (pin a version in prod)
 GEMINI_MODEL_NAME=           # fallback model id if JUDGE_MODEL unset
 JUDGE_TIMEOUT_MS=2500        # server; keep below client pipeline timeout (~3000)
@@ -183,7 +227,7 @@ THROUGHLINE_CLIENT_SECRET=
 # Or: FINDAHELPLINE_CLIENT_ID / FINDAHELPLINE_CLIENT_SECRET
 ```
 
-Without `GEMINI_API_KEY`, the judge fails closed into **rules-only** behavior (literal **high** rules and **review** fail-safe still work).
+With no key, the reference judge does **not** report “no crisis” — it reports itself as unavailable, which is the safe direction. The pipeline then falls back to rules only: literal `high` wording still opens the overlay instantly, and `review` wording also opens it because the judge cannot be consulted.
 
 ### 5. Wire the overlay in chat
 
@@ -257,7 +301,7 @@ import { buildAngeLifelineNumbersBlockForChat } from "@angelifeline/core";
 | `angelifeline-mask.ts` | Client/server PII redaction |
 | `angelifeline-pipeline.ts` | Browser orchestration, static EMS, place hints, session |
 | `angelifeline-judge-prompt.ts` | Classifier system prompt |
-| `angelifeline-judge-server.ts` | Gemini judge + `handleJudgePost` |
+| `angelifeline-judge-server.ts` | Reference judge (Gemini) + `handleJudgePost` |
 | `resolve-hard-crisis.ts` | Server merge (rules + judge) |
 
 Tests (Node 22.15+ / 24; run in CI on both):
